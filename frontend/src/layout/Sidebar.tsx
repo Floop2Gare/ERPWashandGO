@@ -186,35 +186,35 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
           </span>
           {showSidebarHeader && (
             <div className="min-w-0">
-              <p
-                className="text-[11px] font-semibold uppercase tracking-[0.3em]"
-                style={{ color: 'var(--accent)' }}
-              >
-                {BRAND_NAME}
-              </p>
-              {sidebarTitle && (
-                <h1 className="truncate text-base font-semibold" style={{ color: 'var(--text)' }}>
-                  {sidebarTitle}
-                </h1>
-              )}
-              {showBaselineText && (
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  {baseline}
+                <p
+                  className="text-[11px] font-semibold uppercase tracking-[0.3em]"
+                  style={{ color: 'var(--txt-accent)' }}
+                >
+                  {BRAND_NAME}
                 </p>
-              )}
-            </div>
-          )}
+                {sidebarTitle && (
+                  <h1 className="truncate text-base font-semibold" style={{ color: 'var(--txt-primary)' }}>
+                    {sidebarTitle}
+                  </h1>
+                )}
+                {showBaselineText && (
+                  <p className="text-xs" style={{ color: 'var(--txt-muted)' }}>
+                    {baseline}
+                  </p>
+                )}
+              </div>
+            )}
         </div>
         {variant === 'mobile' && (
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--muted)' }}>
-              Navigation
-            </span>
+              <span className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--txt-muted)' }}>
+                Navigation
+              </span>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-              style={{ color: 'var(--accent)' }}
+                className="rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                style={{ color: 'var(--txt-accent)' }}
             >
               Fermer
             </button>
@@ -244,19 +244,19 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                     aria-label={`Réordonner ${link.label}`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="select-none text-base" aria-hidden style={{ color: 'var(--muted)' }}>
-                        ≡
-                      </span>
-                      <span className="tracking-[0.06em]" style={{ color: 'var(--text)' }}>
-                        {link.label}
-                      </span>
+                        <span className="select-none text-base" aria-hidden style={{ color: 'var(--txt-muted)' }}>
+                          ≡
+                        </span>
+                        <span className="tracking-[0.06em]" style={{ color: 'var(--txt-primary)' }}>
+                          {link.label}
+                        </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
                       type="button"
                       onClick={() => handleMoveUp(index)}
                       className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"
-                      style={{ color: 'var(--accent)' }}
+                      style={{ color: 'var(--txt-accent)' }}
                       disabled={index === 0}
                       aria-label={`Déplacer ${link.label} vers le haut`}
                     >
@@ -266,7 +266,7 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                       type="button"
                       onClick={() => handleMoveDown(index)}
                       className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"
-                      style={{ color: 'var(--accent)' }}
+                      style={{ color: 'var(--txt-accent)' }}
                       disabled={index === displayedLinks.length - 1}
                       aria-label={`Déplacer ${link.label} vers le bas`}
                     >
@@ -329,9 +329,9 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
               type="button"
               onClick={handleStartEditing}
               className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-              style={{ color: 'var(--accent)' }}
+              style={{ color: 'var(--txt-accent)' }}
             >
-              <span aria-hidden className="text-sm" style={{ color: 'var(--muted)' }}>
+              <span aria-hidden className="text-sm" style={{ color: 'var(--txt-muted)' }}>
                 ≡
               </span>
               Modifier l'ordre

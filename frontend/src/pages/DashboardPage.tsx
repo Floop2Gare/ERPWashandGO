@@ -16,14 +16,14 @@ import { formatCurrency, formatDuration } from '../lib/format';
 import { BRAND_NAME } from '../lib/branding';
 
 const PrestationsIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M20 6 10 16l-4-4" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M8 20h12" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const RevenueIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path
       d="M12 3v18m4-14H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H8"
       strokeLinecap="round"
@@ -33,21 +33,21 @@ const RevenueIcon = () => (
 );
 
 const DurationIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <circle cx="12" cy="12" r="8" />
     <path d="M12 8v4l2.5 1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const QuoteIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M6 4h9l3 3v13H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M15 4v3h3" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const ServicesIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path
       d="M7 7.5V6a2 2 0 0 1 2-2h2m4 4V6a2 2 0 0 0-2-2h-2M4 10h16"
       strokeLinecap="round"
@@ -58,28 +58,28 @@ const ServicesIcon = () => (
 );
 
 const PurchasesIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M6 7h12l-1 11H7L6 7Z" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M9 7a3 3 0 0 1 6 0" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const DocumentsIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M8 4h6l4 4v12H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M14 4v4h4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const LeadsIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M5 12h6l-2.5 3m2.5-3-2.5-3" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M12 5h7v14h-7" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const ClientsIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <circle cx="9" cy="8" r="3" />
     <circle cx="17" cy="9" r="2.5" />
     <path d="M4.5 19a4.5 4.5 0 0 1 9 0M14.5 19a3.5 3.5 0 0 1 7 0" strokeLinecap="round" strokeLinejoin="round" />
@@ -87,14 +87,14 @@ const ClientsIcon = () => (
 );
 
 const PlanningIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <rect x="4" y="5" width="16" height="15" rx="2" />
     <path d="M8 3v4M16 3v4M4 10h16" strokeLinecap="round" />
   </svg>
 );
 
 const StatsIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M5 20V10" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M12 20V4" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M19 20v-7" strokeLinecap="round" strokeLinejoin="round" />
@@ -102,7 +102,7 @@ const StatsIcon = () => (
 );
 
 const SettingsIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path
       d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.5-3a1.5 1.5 0 0 0 1.06-2.56l-1.12-1.12a1.5 1.5 0 0 1-.35-1.57l.43-1.28A1.5 1.5 0 0 0 18.1 3l-1.28.43a1.5 1.5 0 0 1-1.57-.35L14.13 1.96A1.5 1.5 0 0 0 11.57 3v1.5a1.5 1.5 0 0 1-1.06 1.42l-1.28.43a1.5 1.5 0 0 0-.93 1.93l.43 1.28a1.5 1.5 0 0 1-.35 1.57l-1.12 1.12A1.5 1.5 0 0 0 9 15h1.5a1.5 1.5 0 0 1 1.42 1.06l.43 1.28a1.5 1.5 0 0 0 1.93.93l1.28-.43a1.5 1.5 0 0 1 1.57.35l1.12 1.12A1.5 1.5 0 0 0 21 18.1l-.43-1.28a1.5 1.5 0 0 1 .35-1.57l1.12-1.12A1.5 1.5 0 0 0 19.5 12Z"
       strokeLinecap="round"
@@ -112,7 +112,7 @@ const SettingsIcon = () => (
 );
 
 const UsersIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6}>
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
     <path d="M7 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
     <path d="M17 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
     <path d="M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1" strokeLinecap="round" strokeLinejoin="round" />
@@ -395,16 +395,16 @@ const DashboardPage = () => {
             <p className="mt-1 text-sm text-muted">Retrouvez vos espaces de travail en un clic.</p>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:mx-auto lg:max-w-5xl">
           {quickLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className="quick-link group flex h-full flex-col gap-3 px-4 py-5 text-left focus-visible:outline-none"
+              className="quick-link group flex h-full flex-col gap-3 px-3.5 py-4 text-left focus-visible:outline-none"
             >
               <span className="quick-link__icon">{link.icon}</span>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-text">{link.label}</p>
+                <p className="quick-link__label text-sm font-semibold">{link.label}</p>
                 <p className="text-xs text-muted">{link.description}</p>
               </div>
             </Link>
@@ -419,11 +419,11 @@ const DashboardPage = () => {
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((card) => (
-            <div key={card.label} className="rounded-xl border border-border bg-bg p-5">
+            <div key={card.label} className="rounded-xl border border-border bg-surface p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted">{card.label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-text">{card.value}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{card.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-primary">{card.value}</p>
                 </div>
                 <span className="text-muted">{card.icon}</span>
               </div>
@@ -452,7 +452,7 @@ const DashboardPage = () => {
                 {quotesToSend.map((quote) => (
                   <li
                     key={quote.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <p className="text-sm font-medium text-text">{quote.clientName}</p>
@@ -488,7 +488,7 @@ const DashboardPage = () => {
                 {leadsToContact.map((lead) => (
                   <li
                     key={lead.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <p className="text-sm font-medium text-text">{lead.company}</p>
@@ -503,7 +503,7 @@ const DashboardPage = () => {
                       <button
                         type="button"
                         onClick={() => handleCallLead(lead.id, lead.phone)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                       >
                         <IconPhone />
                         Appeler
@@ -511,7 +511,7 @@ const DashboardPage = () => {
                       <button
                         type="button"
                         onClick={() => handleEmailLead(lead.id, lead.email)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                       >
                         <IconMail />
                         Email
@@ -533,7 +533,7 @@ const DashboardPage = () => {
           </div>
           <Link
             to="/planning"
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             Ouvrir le planning
           </Link>
@@ -541,7 +541,7 @@ const DashboardPage = () => {
         <div className="overflow-x-auto">
           <div className="grid min-w-[640px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             {weekDays.map((day) => (
-              <div key={day.shortLabel} className="rounded-xl border border-border bg-bg p-4">
+              <div key={day.shortLabel} className="rounded-xl border border-border bg-surface p-4">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-sm font-semibold text-text">{day.label.charAt(0).toUpperCase() + day.label.slice(1)}</p>
                   <span className="text-xs text-muted">{day.shortLabel}</span>
@@ -551,7 +551,7 @@ const DashboardPage = () => {
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {day.events.map((event) => (
-                      <li key={event.id} className="rounded-lg border border-border bg-bg px-3 py-2">
+                      <li key={event.id} className="rounded-lg border border-border bg-surface px-3 py-2">
                         <p className="text-sm font-medium text-text">{event.clientName}</p>
                         <p className="text-xs text-muted">{event.serviceName}</p>
                         <p className="text-xs text-muted">{event.timeRange}</p>

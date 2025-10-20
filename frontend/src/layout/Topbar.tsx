@@ -289,7 +289,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-bg">
+    <header className="sticky top-0 z-30 border-b border-border bg-surface">
       <div className="grid w-full gap-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-6">
         <div className="flex items-center gap-3">
           <button
@@ -325,7 +325,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
               autoComplete="off"
             />
             {isFocused && trimmedQuery && (
-              <div className="absolute left-0 right-0 z-40 mt-2 max-h-80 overflow-y-auto rounded-xl border border-border bg-bg shadow-sm">
+              <div className="absolute left-0 right-0 z-40 mt-2 max-h-80 overflow-y-auto rounded-xl border border-border bg-surface shadow-sm">
                 {flatResults.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted">Aucun résultat</p>
                 ) : (
@@ -372,7 +372,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
           <button
             type="button"
             onClick={toggleTheme}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
           >
             {theme === 'dark' ? <IconSun /> : <IconMoon />}
@@ -381,7 +381,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
             <button
               type="button"
               onClick={() => setIsUserMenuOpen((open) => !open)}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg text-sm font-semibold text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-sm font-semibold text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               aria-haspopup="menu"
               aria-expanded={isUserMenuOpen}
               aria-label={isUserMenuOpen ? 'Fermer le menu utilisateur' : 'Ouvrir le menu utilisateur'}
@@ -399,7 +399,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
             {isUserMenuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 z-50 mt-3 w-56 rounded-xl border border-border bg-bg p-2 text-sm text-text shadow-sm"
+                className="absolute right-0 z-50 mt-3 w-56 rounded-xl border border-border bg-surface p-2 text-sm text-text shadow-sm"
               >
                 <div className="px-3 pb-2 text-xs uppercase tracking-[0.28em] text-muted">{displayName}</div>
                 <button
