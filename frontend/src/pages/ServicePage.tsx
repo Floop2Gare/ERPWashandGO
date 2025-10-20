@@ -27,6 +27,7 @@ import {
   Engagement,
   EngagementKind,
   EngagementStatus,
+  EngagementOptionOverride,
   Service,
   ServiceOption,
   SupportType,
@@ -43,6 +44,7 @@ type EngagementDraft = {
   scheduledAt: string;
   serviceId: string;
   optionIds: string[];
+  optionOverrides: Record<string, EngagementOptionOverride>;
   status: EngagementStatus;
   supportType: SupportType;
   supportDetail: string;
@@ -73,9 +75,62 @@ type InvoiceEmailContext = {
   documentNumber: string;
   issueDate: Date;
   optionsSelected: ServiceOption[];
+  optionOverrides?: Record<string, EngagementOptionOverride>;
   totals: { price: number; duration: number; surcharge: number };
   vatEnabled: boolean;
 };
+
+type OptionOverrideResolved = {
+  quantity: number;
+  durationMin: number;
+  unitPriceHT: number;
+};
+
+const sanitizeDraftOverrides = (
+  optionIds: string[],
+  overrides?: Record<string, EngagementOptionOverride>
+): Record<string, EngagementOptionOverride> => {
+  if (!overrides) {
+    return {};
+  }
+  const allowed = new Set(optionIds);
+  const next: Record<string, EngagementOptionOverride> = {};
+  for (const [optionId, value] of Object.entries(overrides)) {
+    if (!allowed.has(optionId)) {
+      continue;
+    }
+    const quantity = value.quantity && Number.isFinite(value.quantity) ? Math.max(1, value.quantity) : 1;
+    const unitPrice =
+      value.unitPriceHT !== undefined && Number.isFinite(value.unitPriceHT)
+        ? Math.max(0, value.unitPriceHT)
+        : undefined;
+    const duration =
+      value.durationMin !== undefined && Number.isFinite(value.durationMin)
+        ? Math.max(0, value.durationMin)
+        : undefined;
+    next[optionId] = {
+      quantity,
+      unitPriceHT: unitPrice,
+      durationMin: duration,
+    };
+  }
+  return next;
+};
+
+const resolveOptionOverride = (
+  option: ServiceOption,
+  override: EngagementOptionOverride | undefined
+): OptionOverrideResolved => ({
+  quantity: override?.quantity && override.quantity > 0 ? override.quantity : 1,
+  durationMin:
+    override?.durationMin !== undefined && override.durationMin >= 0
+      ? override.durationMin
+      : option.defaultDurationMin,
+  unitPriceHT:
+    override?.unitPriceHT !== undefined && override.unitPriceHT >= 0
+      ? override.unitPriceHT
+      : option.unitPriceHT,
+});
 
 const toLocalInputValue = (isoDate: string) => {
   const date = new Date(isoDate);
@@ -117,6 +172,7 @@ const buildInitialDraft = (
   scheduledAt: toLocalInputValue(new Date().toISOString()),
   serviceId: services[0]?.id ?? '',
   optionIds: [],
+  optionOverrides: {},
   status: 'planifié',
   supportType: 'Voiture',
   supportDetail: '',
@@ -133,6 +189,7 @@ const buildDraftFromEngagement = (engagement: Engagement): EngagementDraft => ({
   scheduledAt: toLocalInputValue(engagement.scheduledAt),
   serviceId: engagement.serviceId,
   optionIds: engagement.optionIds,
+  optionOverrides: sanitizeDraftOverrides(engagement.optionIds, engagement.optionOverrides),
   status: engagement.status,
   supportType: engagement.supportType,
   supportDetail: engagement.supportDetail,
@@ -156,6 +213,7 @@ const buildPreviewEngagement = (draft: EngagementDraft, kind: EngagementKind): E
   sendHistory: [],
   invoiceNumber: null,
   invoiceVatEnabled: null,
+  optionOverrides: sanitizeDraftOverrides(draft.optionIds, draft.optionOverrides),
 });
 
 const documentLabels: Record<EngagementKind, string> = {
@@ -450,17 +508,22 @@ const ServicePage = () => {
       contactIds,
     } = pendingEngagementSeed;
     setCreationMode(kind === 'facture' ? 'facture' : 'service');
-    setCreationDraft((draft) => ({
-      ...draft,
-      clientId: clientId || draft.clientId,
-      companyId: companyId ?? draft.companyId,
-      supportType: supportType ?? draft.supportType,
-      supportDetail: supportDetail ?? draft.supportDetail,
-      serviceId: serviceId ?? draft.serviceId,
-      optionIds: optionIds ?? draft.optionIds,
-      status: kind === 'facture' ? 'réalisé' : kind === 'devis' ? 'envoyé' : draft.status,
-      contactIds: contactIds && contactIds.length ? contactIds : draft.contactIds,
-    }));
+    setCreationDraft((draft) => {
+      const nextServiceId = serviceId ?? draft.serviceId;
+      const nextOptionIds = optionIds ?? draft.optionIds;
+      return {
+        ...draft,
+        clientId: clientId || draft.clientId,
+        companyId: companyId ?? draft.companyId,
+        supportType: supportType ?? draft.supportType,
+        supportDetail: supportDetail ?? draft.supportDetail,
+        serviceId: nextServiceId,
+        optionIds: nextOptionIds,
+        optionOverrides: sanitizeDraftOverrides(nextOptionIds, draft.optionOverrides),
+        status: kind === 'facture' ? 'réalisé' : kind === 'devis' ? 'envoyé' : draft.status,
+        contactIds: contactIds && contactIds.length ? contactIds : draft.contactIds,
+      };
+    });
     setIsAddingClient(false);
     setHighlightQuote(kind === 'devis');
     setPendingEngagementSeed(null);
@@ -587,7 +650,11 @@ const ServicePage = () => {
       if (unchanged) {
         return draft;
       }
-      return { ...draft, optionIds: filtered };
+      return {
+        ...draft,
+        optionIds: filtered,
+        optionOverrides: sanitizeDraftOverrides(filtered, draft.optionOverrides),
+      };
     });
     setEditDraft((draft) => {
       if (!draft) {
@@ -605,7 +672,11 @@ const ServicePage = () => {
       if (unchanged) {
         return draft;
       }
-      return { ...draft, optionIds: filtered };
+      return {
+        ...draft,
+        optionIds: filtered,
+        optionOverrides: sanitizeDraftOverrides(filtered, draft.optionOverrides),
+      };
     });
   }, [servicesById]);
 
@@ -835,12 +906,39 @@ const ServicePage = () => {
   };
 
   const toggleCreationOption = (optionId: string) => {
-    setCreationDraft((draft) => ({
-      ...draft,
-      optionIds: draft.optionIds.includes(optionId)
-        ? draft.optionIds.filter((id) => id !== optionId)
-        : [...draft.optionIds, optionId],
-    }));
+    setCreationDraft((draft) => {
+      const alreadySelected = draft.optionIds.includes(optionId);
+      if (alreadySelected) {
+        const nextIds = draft.optionIds.filter((id) => id !== optionId);
+        const nextOverrides = { ...draft.optionOverrides };
+        delete nextOverrides[optionId];
+        return {
+          ...draft,
+          optionIds: nextIds,
+          optionOverrides: nextOverrides,
+        };
+      }
+      const service = servicesById.get(draft.serviceId);
+      if (!service) {
+        return draft;
+      }
+      const option = service.options.find((item) => item.id === optionId);
+      if (!option) {
+        return draft;
+      }
+      return {
+        ...draft,
+        optionIds: [...draft.optionIds, optionId],
+        optionOverrides: {
+          ...draft.optionOverrides,
+          [optionId]: {
+            quantity: 1,
+            durationMin: option.defaultDurationMin,
+            unitPriceHT: option.unitPriceHT,
+          },
+        },
+      };
+    });
   };
 
   const toggleCreationContact = (contactId: string) => {
@@ -852,15 +950,74 @@ const ServicePage = () => {
     }));
   };
 
+  const updateCreationOverride = (
+    optionId: string,
+    updates: Partial<OptionOverrideResolved>
+  ) => {
+    setCreationDraft((draft) => {
+      if (!draft.optionIds.includes(optionId)) {
+        return draft;
+      }
+      const current = draft.optionOverrides[optionId] ?? {};
+      const next: EngagementOptionOverride = { ...current };
+      if (updates.quantity !== undefined) {
+        const value = Number.isFinite(updates.quantity) ? Math.max(1, updates.quantity) : 1;
+        next.quantity = value;
+      }
+      if (updates.durationMin !== undefined) {
+        const value = Number.isFinite(updates.durationMin) ? Math.max(0, updates.durationMin) : 0;
+        next.durationMin = value;
+      }
+      if (updates.unitPriceHT !== undefined) {
+        const value = Number.isFinite(updates.unitPriceHT) ? Math.max(0, updates.unitPriceHT) : 0;
+        next.unitPriceHT = value;
+      }
+      return {
+        ...draft,
+        optionOverrides: {
+          ...draft.optionOverrides,
+          [optionId]: next,
+        },
+      };
+    });
+  };
+
   const toggleEditOption = (optionId: string) => {
     setEditDraft((draft) => {
       if (!draft) {
         return draft;
       }
-      const optionIds = draft.optionIds.includes(optionId)
-        ? draft.optionIds.filter((id) => id !== optionId)
-        : [...draft.optionIds, optionId];
-      return { ...draft, optionIds };
+      const alreadySelected = draft.optionIds.includes(optionId);
+      if (alreadySelected) {
+        const nextIds = draft.optionIds.filter((id) => id !== optionId);
+        const nextOverrides = { ...draft.optionOverrides };
+        delete nextOverrides[optionId];
+        return {
+          ...draft,
+          optionIds: nextIds,
+          optionOverrides: nextOverrides,
+        };
+      }
+      const service = servicesById.get(draft.serviceId);
+      if (!service) {
+        return draft;
+      }
+      const option = service.options.find((item) => item.id === optionId);
+      if (!option) {
+        return draft;
+      }
+      return {
+        ...draft,
+        optionIds: [...draft.optionIds, optionId],
+        optionOverrides: {
+          ...draft.optionOverrides,
+          [optionId]: {
+            quantity: 1,
+            durationMin: option.defaultDurationMin,
+            unitPriceHT: option.unitPriceHT,
+          },
+        },
+      };
     });
   };
 
@@ -873,6 +1030,38 @@ const ServicePage = () => {
         ? draft.contactIds.filter((id) => id !== contactId)
         : [...draft.contactIds, contactId];
       return { ...draft, contactIds };
+    });
+  };
+
+  const updateEditOverride = (
+    optionId: string,
+    updates: Partial<OptionOverrideResolved>
+  ) => {
+    setEditDraft((draft) => {
+      if (!draft || !draft.optionIds.includes(optionId)) {
+        return draft;
+      }
+      const current = draft.optionOverrides[optionId] ?? {};
+      const next: EngagementOptionOverride = { ...current };
+      if (updates.quantity !== undefined) {
+        const value = Number.isFinite(updates.quantity) ? Math.max(1, updates.quantity) : 1;
+        next.quantity = value;
+      }
+      if (updates.durationMin !== undefined) {
+        const value = Number.isFinite(updates.durationMin) ? Math.max(0, updates.durationMin) : 0;
+        next.durationMin = value;
+      }
+      if (updates.unitPriceHT !== undefined) {
+        const value = Number.isFinite(updates.unitPriceHT) ? Math.max(0, updates.unitPriceHT) : 0;
+        next.unitPriceHT = value;
+      }
+      return {
+        ...draft,
+        optionOverrides: {
+          ...draft.optionOverrides,
+          [optionId]: next,
+        },
+      };
     });
   };
 
@@ -1063,6 +1252,7 @@ const ServicePage = () => {
       clientId: creationDraft.clientId,
       serviceId: creationDraft.serviceId,
       optionIds: creationDraft.optionIds,
+      optionOverrides: creationDraft.optionOverrides,
       scheduledAt: fromLocalInputValue(creationDraft.scheduledAt),
       status: options?.sendAsQuote ? 'envoyé' : creationDraft.status,
       companyId: selectedCompany.id,
@@ -1097,6 +1287,7 @@ const ServicePage = () => {
     documentNumber,
     issueDate,
     optionsSelected,
+    optionOverrides,
     totals,
     vatEnabled,
   }: InvoiceEmailContext & { optionsSelected: ServiceOption[] }) => {
@@ -1126,8 +1317,20 @@ const ServicePage = () => {
       : '';
 
     const prestationEntries = optionsSelected.map((option) => {
-      const durationLabel = option.duration ? ` (${formatDuration(option.duration)})` : '';
-      return `• ${option.label}${durationLabel} – ${formatCurrency(option.price)}`;
+      const override = optionOverrides?.[option.id];
+      const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+      const durationValue =
+        override?.durationMin !== undefined && override.durationMin >= 0
+          ? override.durationMin
+          : option.defaultDurationMin;
+      const unitPrice =
+        override?.unitPriceHT !== undefined && override.unitPriceHT >= 0
+          ? override.unitPriceHT
+          : option.unitPriceHT;
+      const quantityLabel = quantity !== 1 ? `${quantity} × ` : '';
+      const durationLabel = durationValue ? ` (${formatDuration(durationValue)})` : '';
+      const lineTotal = formatCurrency(unitPrice * quantity);
+      return `• ${quantityLabel}${option.label}${durationLabel} – ${lineTotal}`;
     });
     if (totals.surcharge > 0) {
       prestationEntries.push(`• Majoration – ${formatCurrency(totals.surcharge)}`);
@@ -1221,6 +1424,7 @@ const ServicePage = () => {
         client,
         service,
         options: optionsSelected,
+        optionOverrides: engagement.optionOverrides ?? {},
         additionalCharge: engagement.additionalCharge,
         vatRate: vatPercent,
         vatEnabled: vatEnabledForInvoice,
@@ -1265,6 +1469,7 @@ const ServicePage = () => {
           documentNumber,
           issueDate,
           optionsSelected,
+          optionOverrides: nextEngagement.optionOverrides ?? {},
           totals,
           vatEnabled: vatEnabledForInvoice,
         });
@@ -1300,6 +1505,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
       clientId: editDraft.clientId,
       serviceId: editDraft.serviceId,
       optionIds: editDraft.optionIds,
+      optionOverrides: editDraft.optionOverrides,
       scheduledAt: fromLocalInputValue(editDraft.scheduledAt),
       status: editDraft.status,
       companyId: editDraft.companyId ? editDraft.companyId : null,
@@ -1311,6 +1517,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
     if (updated) {
       setFeedback('Prestation mise à jour.');
       setSelectedEngagementId(updated.id);
+      setEditDraft(buildDraftFromEngagement(updated));
     }
   };
 
@@ -1510,9 +1717,19 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
   };
 
   const creationSelectedOptions =
-    creationSelectedService?.options.filter((option) => creationDraft.optionIds.includes(option.id)) ?? [];
+    creationSelectedService?.options
+      .filter((option) => creationDraft.optionIds.includes(option.id))
+      .map((option) => ({
+        option,
+        override: resolveOptionOverride(option, creationDraft.optionOverrides[option.id]),
+      })) ?? [];
   const editSelectedOptions =
-    editSelectedService?.options.filter((option) => editDraft?.optionIds.includes(option.id) ?? false) ?? [];
+    editSelectedService?.options
+      .filter((option) => (editDraft?.optionIds.includes(option.id) ?? false))
+      .map((option) => ({
+        option,
+        override: resolveOptionOverride(option, editDraft?.optionOverrides?.[option.id]),
+      })) ?? [];
 
   return (
     <div className="space-y-8">
@@ -1984,6 +2201,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       ...draft,
                       serviceId: event.target.value,
                       optionIds: [],
+                      optionOverrides: {},
                     }))
                   }
                   className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -1995,20 +2213,97 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     </option>
                   ))}
                 </select>
-                <div className="space-y-2 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+                <div className="space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Prestations</p>
                   {creationSelectedService ? (
-                    creationSelectedService.options.map((option) => (
-                      <label key={option.id} className="flex items-center justify-between gap-3">
-                        <span>{option.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={creationDraft.optionIds.includes(option.id)}
-                          onChange={() => toggleCreationOption(option.id)}
-                          className="accent-primary"
-                        />
-                      </label>
-                    ))
+                    creationSelectedService.options.map((option) => {
+                      const selected = creationDraft.optionIds.includes(option.id);
+                      const override = resolveOptionOverride(option, creationDraft.optionOverrides[option.id]);
+                      return (
+                        <div
+                          key={option.id}
+                          className={clsx(
+                            'rounded border px-3 py-2 transition',
+                            selected
+                              ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
+                              : 'border-slate-200 bg-white/70 text-slate-600'
+                          )}
+                        >
+                          <label className="flex items-center justify-between gap-3 text-xs font-medium">
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleCreationOption(option.id)}
+                                className="h-3.5 w-3.5 accent-primary"
+                              />
+                              <span className="text-slate-800">{option.label}</span>
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
+                            </span>
+                          </label>
+                          {option.description && (
+                            <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
+                          )}
+                          {selected && (
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Quantité
+                                </span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={override.quantity}
+                                  onChange={(event) =>
+                                    updateCreationOverride(option.id, {
+                                      quantity: Number.parseFloat(event.target.value) || 1,
+                                    })
+                                  }
+                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Durée (min)
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="5"
+                                  value={override.durationMin}
+                                  onChange={(event) =>
+                                    updateCreationOverride(option.id, {
+                                      durationMin: Number.parseFloat(event.target.value) || 0,
+                                    })
+                                  }
+                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Prix HT (€)
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={override.unitPriceHT}
+                                  onChange={(event) =>
+                                    updateCreationOverride(option.id, {
+                                      unitPriceHT: Number.parseFloat(event.target.value) || 0,
+                                    })
+                                  }
+                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <p className="text-[11px] text-slate-400">Sélectionnez un service pour afficher les prestations.</p>
                   )}
@@ -2066,7 +2361,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   <p>
                     Prestations sélectionnées :{' '}
                     <span className="font-medium text-slate-700">
-                      {creationSelectedOptions.map((option) => option.label).join(' • ')}
+                      {creationSelectedOptions
+                        .map(({ option, override }) =>
+                          `${override.quantity.toFixed(0)} × ${option.label}`
+                        )
+                        .join(' • ')}
                     </span>
                   </p>
                 ) : (
@@ -2295,15 +2594,16 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   id="edit-service"
                   value={editDraft.serviceId}
                   onChange={(event) =>
-                    setEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            serviceId: event.target.value,
-                            optionIds: [],
-                          }
-                        : draft
-                    )
+                          setEditDraft((draft) =>
+                            draft
+                              ? {
+                                  ...draft,
+                                  serviceId: event.target.value,
+                                  optionIds: [],
+                                  optionOverrides: {},
+                                }
+                              : draft
+                          )
                   }
                   className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
@@ -2314,20 +2614,100 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     </option>
                   ))}
                 </select>
-                <div className="space-y-2 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+                <div className="space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Prestations</p>
                   {editSelectedService ? (
-                    editSelectedService.options.map((option) => (
-                      <label key={option.id} className="flex items-center justify-between gap-3">
-                        <span>{option.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={!!editDraft.optionIds.includes(option.id)}
-                          onChange={() => toggleEditOption(option.id)}
-                          className="accent-primary"
-                        />
-                      </label>
-                    ))
+                    editSelectedService.options.map((option) => {
+                      const selected = editDraft.optionIds.includes(option.id);
+                      const override = resolveOptionOverride(
+                        option,
+                        editDraft.optionOverrides?.[option.id]
+                      );
+                      return (
+                        <div
+                          key={option.id}
+                          className={clsx(
+                            'rounded border px-3 py-2 transition',
+                            selected
+                              ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
+                              : 'border-slate-200 bg-white/70 text-slate-600'
+                          )}
+                        >
+                          <label className="flex items-center justify-between gap-3 text-xs font-medium">
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleEditOption(option.id)}
+                                className="h-3.5 w-3.5 accent-primary"
+                              />
+                              <span className="text-slate-800">{option.label}</span>
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
+                            </span>
+                          </label>
+                          {option.description && (
+                            <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
+                          )}
+                          {selected && (
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Quantité
+                                </span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={override.quantity}
+                                  onChange={(event) =>
+                                    updateEditOverride(option.id, {
+                                      quantity: Number.parseFloat(event.target.value) || 1,
+                                    })
+                                  }
+                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Durée (min)
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="5"
+                                  value={override.durationMin}
+                                  onChange={(event) =>
+                                    updateEditOverride(option.id, {
+                                      durationMin: Number.parseFloat(event.target.value) || 0,
+                                    })
+                                  }
+                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Prix HT (€)
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={override.unitPriceHT}
+                                  onChange={(event) =>
+                                    updateEditOverride(option.id, {
+                                      unitPriceHT: Number.parseFloat(event.target.value) || 0,
+                                    })
+                                  }
+                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <p className="text-[11px] text-slate-400">Choisissez un service pour afficher les prestations.</p>
                   )}
@@ -2435,7 +2815,9 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   <p>
                     Prestations sélectionnées :{' '}
                     <span className="font-medium text-slate-700">
-                      {editSelectedOptions.map((option) => option.label).join(' • ')}
+                      {editSelectedOptions
+                        .map(({ option, override }) => `${override.quantity.toFixed(0)} × ${option.label}`)
+                        .join(' • ')}
                     </span>
                   </p>
                 ) : (

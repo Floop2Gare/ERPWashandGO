@@ -49,18 +49,28 @@ export type Client = {
 export type ServiceOption = {
   id: string;
   label: string;
-  price: number;
-  duration: number;
-  tag?: string;
+  description?: string;
+  defaultDurationMin: number;
+  unitPriceHT: number;
+  tvaPct?: number | null;
+  active: boolean;
 };
+
+export type ServiceCategory = 'Voiture' | 'Canapé' | 'Textile' | 'Autre';
 
 export type Service = {
   id: string;
-  category: 'Voiture' | 'Canapé' | 'Textile';
+  category: ServiceCategory;
   name: string;
-  description: string;
+  description?: string;
   options: ServiceOption[];
   active: boolean;
+};
+
+export type EngagementOptionOverride = {
+  quantity?: number;
+  unitPriceHT?: number;
+  durationMin?: number;
 };
 
 export type EngagementStatus = 'brouillon' | 'envoyé' | 'planifié' | 'réalisé' | 'annulé';
@@ -99,6 +109,7 @@ export type Engagement = {
   sendHistory: EngagementSendRecord[];
   invoiceNumber: string | null;
   invoiceVatEnabled: boolean | null;
+  optionOverrides?: Record<string, EngagementOptionOverride>;
 };
 
 export type Note = {
@@ -583,16 +594,20 @@ const computeServiceAveragePrice = (service: Service | undefined) => {
   if (!service || service.options.length === 0) {
     return 0;
   }
-  const total = service.options.reduce((sum, option) => sum + option.price, 0);
-  return total / service.options.length;
+  const base = service.options.filter((option) => option.active);
+  const options = base.length > 0 ? base : service.options;
+  const total = options.reduce((sum, option) => sum + option.unitPriceHT, 0);
+  return total / options.length;
 };
 
 const computeServiceAverageDuration = (service: Service | undefined) => {
   if (!service || service.options.length === 0) {
     return 0;
   }
-  const optionDuration = service.options.reduce((sum, option) => sum + option.duration, 0);
-  return optionDuration / service.options.length;
+  const base = service.options.filter((option) => option.active);
+  const options = base.length > 0 ? base : service.options;
+  const optionDuration = options.reduce((sum, option) => sum + option.defaultDurationMin, 0);
+  return optionDuration / options.length;
 };
 
 const initialProfile: UserProfile = {
@@ -1404,8 +1419,24 @@ const initialServices: Service[] = [
     name: 'Nettoyage intérieur complet',
     description: 'Aspiration, dégraissage et protection des surfaces intérieures.',
     options: [
-      { id: 'o1', label: 'Protection tissus', price: 35, duration: 30, tag: 'Protection' },
-      { id: 'o2', label: 'Traitement désodorisant', price: 15, duration: 15, tag: 'Confort' },
+      {
+        id: 'o1',
+        label: 'Protection tissus',
+        description: 'Protection',
+        unitPriceHT: 35,
+        defaultDurationMin: 30,
+        tvaPct: 20,
+        active: true,
+      },
+      {
+        id: 'o2',
+        label: 'Traitement désodorisant',
+        description: 'Confort',
+        unitPriceHT: 15,
+        defaultDurationMin: 15,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: true,
   },
@@ -1415,7 +1446,15 @@ const initialServices: Service[] = [
     name: 'Détachage canapé 3 places',
     description: 'Nettoyage vapeur et traitement anti-taches.',
     options: [
-      { id: 'o3', label: 'Protection imperméabilisante', price: 25, duration: 20, tag: 'Protection' },
+      {
+        id: 'o3',
+        label: 'Protection imperméabilisante',
+        description: 'Protection',
+        unitPriceHT: 25,
+        defaultDurationMin: 20,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: true,
   },
@@ -1425,8 +1464,24 @@ const initialServices: Service[] = [
     name: 'Nettoyage tapis laine',
     description: 'Aspiration en profondeur et shampoing doux.',
     options: [
-      { id: 'o4', label: 'Traitement anti-acariens', price: 40, duration: 25, tag: 'Santé' },
-      { id: 'o5', label: 'Séchage accéléré', price: 20, duration: 15, tag: 'Logistique' },
+      {
+        id: 'o4',
+        label: 'Traitement anti-acariens',
+        description: 'Santé',
+        unitPriceHT: 40,
+        defaultDurationMin: 25,
+        tvaPct: 20,
+        active: true,
+      },
+      {
+        id: 'o5',
+        label: 'Séchage accéléré',
+        description: 'Logistique',
+        unitPriceHT: 20,
+        defaultDurationMin: 15,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: true,
   },
@@ -1436,7 +1491,15 @@ const initialServices: Service[] = [
     name: 'Rénovation sièges cuir',
     description: 'Nettoyage, nourrissage et finition satinée.',
     options: [
-      { id: 'o6', label: 'Protection anti-UV', price: 30, duration: 20, tag: 'Protection' },
+      {
+        id: 'o6',
+        label: 'Protection anti-UV',
+        description: 'Protection',
+        unitPriceHT: 30,
+        defaultDurationMin: 20,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: false,
   },
@@ -1902,14 +1965,56 @@ const projects: Project[] = [
   },
 ];
 
+const sanitizeOptionOverrides = (
+  optionIds: string[],
+  overrides?: Record<string, EngagementOptionOverride>
+): Record<string, EngagementOptionOverride> => {
+  if (!overrides) {
+    return {};
+  }
+  const allowed = new Set(optionIds);
+  const next: Record<string, EngagementOptionOverride> = {};
+  for (const [optionId, value] of Object.entries(overrides)) {
+    if (!allowed.has(optionId)) {
+      continue;
+    }
+    const quantity = value.quantity && Number.isFinite(value.quantity) ? Math.max(1, value.quantity) : 1;
+    const unitPrice =
+      value.unitPriceHT !== undefined && Number.isFinite(value.unitPriceHT)
+        ? Math.max(0, value.unitPriceHT)
+        : undefined;
+    const duration =
+      value.durationMin !== undefined && Number.isFinite(value.durationMin)
+        ? Math.max(0, value.durationMin)
+        : undefined;
+    next[optionId] = {
+      quantity,
+      unitPriceHT: unitPrice,
+      durationMin: duration,
+    };
+  }
+  return next;
+};
+
 const computeTotals = (engagement: Engagement, catalogue: Service[] = initialServices) => {
   const service = catalogue.find((item) => item.id === engagement.serviceId);
   if (!service) {
     return { price: 0, duration: 0, surcharge: 0 };
   }
+  const overrides = sanitizeOptionOverrides(engagement.optionIds, engagement.optionOverrides);
   const selectedOptions = service.options.filter((option) => engagement.optionIds.includes(option.id));
-  const price = selectedOptions.reduce((acc, option) => acc + option.price, 0);
-  const duration = selectedOptions.reduce((acc, option) => acc + option.duration, 0);
+  const price = selectedOptions.reduce((acc, option) => {
+    const override = overrides[option.id];
+    const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+    const unitPrice = override?.unitPriceHT ?? option.unitPriceHT;
+    return acc + unitPrice * quantity;
+  }, 0);
+  const duration = selectedOptions.reduce((acc, option) => {
+    const override = overrides[option.id];
+    const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+    const durationValue = override?.durationMin ?? option.defaultDurationMin;
+    return acc + durationValue * quantity;
+  }, 0);
   const surcharge = engagement.additionalCharge ?? 0;
   return { price, duration, surcharge };
 };
@@ -2405,8 +2510,12 @@ export const useAppData = create<AppState>((set, get) => ({
     });
   },
   addEngagement: (payload) => {
+    const optionIds = payload.optionIds ? [...payload.optionIds] : [];
+    const overrides = sanitizeOptionOverrides(optionIds, payload.optionOverrides);
     const newEngagement: Engagement = {
       ...payload,
+      optionIds,
+      optionOverrides: overrides,
       additionalCharge: payload.additionalCharge ?? 0,
       contactIds: payload.contactIds ?? [],
       sendHistory: payload.sendHistory ?? [],
@@ -2433,9 +2542,13 @@ export const useAppData = create<AppState>((set, get) => ({
         if (engagement.id !== engagementId) {
           return engagement;
         }
+        const optionIds = updates.optionIds ? [...updates.optionIds] : engagement.optionIds;
+        const overrides = sanitizeOptionOverrides(optionIds, updates.optionOverrides ?? engagement.optionOverrides);
         const next: Engagement = {
           ...engagement,
           ...updates,
+          optionIds,
+          optionOverrides: overrides,
           additionalCharge:
             updates.additionalCharge !== undefined ? updates.additionalCharge : engagement.additionalCharge,
           contactIds: updates.contactIds ? [...updates.contactIds] : engagement.contactIds,
@@ -2501,7 +2614,7 @@ export const useAppData = create<AppState>((set, get) => ({
   getServiceCategorySummary: () => {
     const { services, engagements } = get();
     const compute = get().computeEngagementTotals;
-    return ['Voiture', 'Canapé', 'Textile'].map((category) => {
+    return ['Voiture', 'Canapé', 'Textile', 'Autre'].map((category) => {
       const typedCategory = category as Service['category'];
       const catalog = services.filter((service) => service.category === typedCategory);
       const aggregate = catalog.reduce(
@@ -2728,9 +2841,22 @@ export const useAppData = create<AppState>((set, get) => ({
         if (service.id !== serviceId) {
           return service;
         }
+        const duration = Number.isFinite(payload.defaultDurationMin)
+          ? Math.max(0, payload.defaultDurationMin)
+          : 0;
+        const unitPrice = Number.isFinite(payload.unitPriceHT) ? Math.max(0, payload.unitPriceHT) : 0;
+        const tva =
+          payload.tvaPct === null || payload.tvaPct === undefined || Number.isNaN(payload.tvaPct)
+            ? null
+            : payload.tvaPct;
         created = {
           id: `opt${Date.now()}`,
-          ...payload,
+          label: payload.label.trim(),
+          description: payload.description?.trim() || undefined,
+          defaultDurationMin: duration,
+          unitPriceHT: unitPrice,
+          tvaPct: tva,
+          active: payload.active ?? true,
         };
         return {
           ...service,
@@ -2755,9 +2881,30 @@ export const useAppData = create<AppState>((set, get) => ({
           if (option.id !== optionId) {
             return option;
           }
+          const duration =
+            updates.defaultDurationMin !== undefined && Number.isFinite(updates.defaultDurationMin)
+              ? Math.max(0, updates.defaultDurationMin)
+              : option.defaultDurationMin;
+          const unitPrice =
+            updates.unitPriceHT !== undefined && Number.isFinite(updates.unitPriceHT)
+              ? Math.max(0, updates.unitPriceHT)
+              : option.unitPriceHT;
+          const tva =
+            Object.prototype.hasOwnProperty.call(updates, 'tvaPct')
+              ? updates.tvaPct === null || updates.tvaPct === undefined || Number.isNaN(updates.tvaPct)
+                ? null
+                : updates.tvaPct
+              : option.tvaPct ?? null;
           updated = {
             ...option,
             ...updates,
+            label: updates.label !== undefined ? updates.label.trim() : option.label,
+            description:
+              updates.description !== undefined ? updates.description?.trim() || undefined : option.description,
+            defaultDurationMin: duration,
+            unitPriceHT: unitPrice,
+            tvaPct: tva,
+            active: updates.active !== undefined ? updates.active : option.active,
           };
           return updated;
         });
