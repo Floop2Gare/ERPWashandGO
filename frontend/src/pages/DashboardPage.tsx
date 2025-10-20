@@ -377,30 +377,30 @@ const DashboardPage = () => {
   ];
 
   return (
-    <div className="space-y-10">
-      <header className="space-y-3">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Vue d’ensemble</p>
-          <h1 className="text-3xl font-semibold text-text">Tableau de bord</h1>
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <div className="space-y-0.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Vue d’ensemble</p>
+          <h1 className="text-2xl font-semibold text-text">Tableau de bord</h1>
         </div>
-        <p className="max-w-2xl text-sm leading-6 text-muted">
+        <p className="max-w-2xl text-xs leading-5 text-muted">
           Surveillez vos indicateurs clés et accédez rapidement aux modules essentiels de {BRAND_NAME}.
         </p>
       </header>
 
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-text">Accès rapides</h2>
-            <p className="mt-1 text-sm text-muted">Retrouvez vos espaces de travail en un clic.</p>
+            <h2 className="text-sm font-semibold text-text">Accès rapides</h2>
+            <p className="mt-0.5 text-xs text-muted">Retrouvez vos espaces de travail en un clic.</p>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:mx-auto lg:max-w-5xl">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:mx-auto lg:max-w-5xl">
           {quickLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className="quick-link group flex h-full flex-col gap-3 px-3.5 py-4 text-left focus-visible:outline-none"
+              className="quick-link group flex h-full flex-col gap-2.5 px-3 py-3 text-left focus-visible:outline-none"
             >
               <span className="quick-link__icon">{link.icon}</span>
               <div className="space-y-1">
@@ -412,37 +412,37 @@ const DashboardPage = () => {
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div>
-          <h2 className="text-base font-semibold text-text">Chiffres clés</h2>
-          <p className="mt-1 text-sm text-muted">Suivez vos indicateurs consolidés.</p>
+          <h2 className="text-sm font-semibold text-text">Chiffres clés</h2>
+          <p className="mt-0.5 text-xs text-muted">Suivez vos indicateurs consolidés.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((card) => (
-            <div key={card.label} className="rounded-xl border border-border bg-surface p-5">
-              <div className="flex items-center justify-between gap-4">
+            <div key={card.label} className="rounded-xl border border-border bg-surface p-4">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{card.label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-primary">{card.value}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{card.label}</p>
+                  <p className="mt-1.5 text-xl font-semibold text-primary">{card.value}</p>
                 </div>
                 <span className="text-muted">{card.icon}</span>
               </div>
-              <p className="mt-2 text-xs text-muted">{card.description}</p>
+              <p className="mt-1.5 text-[11px] text-muted">{card.description}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div>
-            <h2 className="text-base font-semibold text-text">À traiter</h2>
-            <p className="mt-1 text-sm text-muted">Vos actions prioritaires du moment.</p>
+            <h2 className="text-sm font-semibold text-text">À traiter</h2>
+            <p className="mt-0.5 text-xs text-muted">Vos actions prioritaires du moment.</p>
           </div>
         </div>
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-text">Devis non envoyés</h3>
+            <h3 className="text-xs font-semibold text-text uppercase tracking-wide">Devis non envoyés</h3>
             {quotesToSend.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted">
                 Tous les devis sont à jour.
@@ -452,7 +452,7 @@ const DashboardPage = () => {
                 {quotesToSend.map((quote) => (
                   <li
                     key={quote.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <p className="text-sm font-medium text-text">{quote.clientName}</p>
@@ -461,11 +461,11 @@ const DashboardPage = () => {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-text">{formatCurrency(quote.amount)}</span>
+                      <span className="text-xs font-semibold text-text">{formatCurrency(quote.amount)}</span>
                       <button
                         type="button"
                         onClick={() => handleSendQuote(quote.id)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                         style={{ color: 'var(--inverse-text)' }}
                       >
                         <IconSend />
@@ -478,7 +478,7 @@ const DashboardPage = () => {
             )}
           </div>
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-text">Prospects à contacter</h3>
+            <h3 className="text-xs font-semibold text-text uppercase tracking-wide">Prospects à contacter</h3>
             {leadsToContact.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted">
                 Aucun prospect en attente de relance.
@@ -488,7 +488,7 @@ const DashboardPage = () => {
                 {leadsToContact.map((lead) => (
                   <li
                     key={lead.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <p className="text-sm font-medium text-text">{lead.company}</p>
@@ -503,7 +503,7 @@ const DashboardPage = () => {
                       <button
                         type="button"
                         onClick={() => handleCallLead(lead.id, lead.phone)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                       >
                         <IconPhone />
                         Appeler
@@ -511,7 +511,7 @@ const DashboardPage = () => {
                       <button
                         type="button"
                         onClick={() => handleEmailLead(lead.id, lead.email)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                       >
                         <IconMail />
                         Email
@@ -525,36 +525,38 @@ const DashboardPage = () => {
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div>
-            <h2 className="text-base font-semibold text-text">Planning de la semaine</h2>
-            <p className="mt-1 text-sm text-muted">Vue synthétique des interventions du lundi au dimanche.</p>
+            <h2 className="text-sm font-semibold text-text">Planning de la semaine</h2>
+            <p className="mt-0.5 text-xs text-muted">Vue synthétique des interventions du lundi au dimanche.</p>
           </div>
           <Link
             to="/planning"
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             Ouvrir le planning
           </Link>
         </div>
         <div className="overflow-x-auto">
-          <div className="grid min-w-[640px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          <div className="grid min-w-[640px] grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             {weekDays.map((day) => (
-              <div key={day.shortLabel} className="rounded-xl border border-border bg-surface p-4">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-sm font-semibold text-text">{day.label.charAt(0).toUpperCase() + day.label.slice(1)}</p>
-                  <span className="text-xs text-muted">{day.shortLabel}</span>
+              <div key={day.shortLabel} className="rounded-xl border border-border bg-surface p-3">
+                <div className="flex items-baseline justify-between gap-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-text">
+                    {day.label.charAt(0).toUpperCase() + day.label.slice(1)}
+                  </p>
+                  <span className="text-[11px] text-muted">{day.shortLabel}</span>
                 </div>
                 {day.events.length === 0 ? (
-                  <p className="mt-3 text-xs text-muted">Aucun rendez-vous.</p>
+                  <p className="mt-2 text-[11px] text-muted">Aucun rendez-vous.</p>
                 ) : (
-                  <ul className="mt-3 space-y-2">
+                  <ul className="mt-2 space-y-1.5">
                     {day.events.map((event) => (
-                      <li key={event.id} className="rounded-lg border border-border bg-surface px-3 py-2">
-                        <p className="text-sm font-medium text-text">{event.clientName}</p>
-                        <p className="text-xs text-muted">{event.serviceName}</p>
-                        <p className="text-xs text-muted">{event.timeRange}</p>
+                      <li key={event.id} className="rounded-lg border border-border bg-surface px-3 py-1.5">
+                        <p className="text-xs font-semibold text-text">{event.clientName}</p>
+                        <p className="text-[11px] text-muted">{event.serviceName}</p>
+                        <p className="text-[11px] text-muted">{event.timeRange}</p>
                       </li>
                     ))}
                   </ul>

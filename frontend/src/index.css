@@ -219,8 +219,8 @@ body[data-theme='dark'] ::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 2.5rem;
-  width: 2.5rem;
+  height: 2.125rem;
+  width: 2.125rem;
   color: var(--txt-muted);
   transition: color 0.2s ease;
 }
