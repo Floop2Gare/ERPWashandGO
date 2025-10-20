@@ -13,7 +13,6 @@ import DocumentsPage from './pages/DocumentsPage';
 import LoginPage from './pages/LoginPage';
 import UsersAdminPage from './pages/UsersAdminPage';
 import { useAppData } from './store/useAppData';
-import { applyBrandingColorToDocument } from './lib/branding';
 import { SIDEBAR_NAVIGATION_LINKS } from './layout/navigationLinks';
 import type { AppPageKey } from './lib/rbac';
 
@@ -55,7 +54,6 @@ const RequirePage = ({ page, children }: { page: AppPageKey; children: JSX.Eleme
 const App = () => {
   const isAuthenticated = useAppData((state) => state.currentUserId !== null);
   const theme = useAppData((state) => state.theme);
-  const brandingColorId = useAppData((state) => state.brandingColorId);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -63,18 +61,11 @@ const App = () => {
     }
     const body = document.body;
     const root = document.documentElement;
-    body.classList.remove('washingo-light', 'washingo-dark');
-    body.classList.add(theme === 'dark' ? 'washingo-dark' : 'washingo-light');
-    root.classList.remove('washingo-light', 'washingo-dark');
-    root.classList.add(theme === 'dark' ? 'washingo-dark' : 'washingo-light');
-    root.classList.toggle('dark', theme === 'dark');
     root.setAttribute('data-theme', theme);
+    root.classList.toggle('dark', theme === 'dark');
     root.style.colorScheme = theme;
+    body.setAttribute('data-theme', theme);
   }, [theme]);
-
-  useEffect(() => {
-    applyBrandingColorToDocument(brandingColorId);
-  }, [brandingColorId]);
 
   return (
     <Routes>

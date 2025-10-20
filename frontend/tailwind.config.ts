@@ -1,12 +1,23 @@
 import type { Config } from 'tailwindcss';
 
+const withOpacity = (variable: string) => ({ opacityValue }: { opacityValue?: string }) => {
+  if (opacityValue === undefined) {
+    return `rgb(var(${variable}))`;
+  }
+  return `rgb(var(${variable}) / ${opacityValue})`;
+};
+
 const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        primary: '#0049ac',
-        accent: '#0f172a',
+        primary: withOpacity('--accent-rgb'),
+        surface: withOpacity('--surface-rgb'),
+        bg: withOpacity('--bg-rgb'),
+        border: withOpacity('--border-rgb'),
+        text: withOpacity('--text-rgb'),
+        muted: withOpacity('--muted-rgb'),
       },
       fontFamily: {
         sans: ['"Inter"', 'system-ui', 'sans-serif'],

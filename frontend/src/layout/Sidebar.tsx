@@ -181,42 +181,47 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
     >
       <div className="mb-8 space-y-4">
         <div className="flex items-center gap-3">
-          <span
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-3xl text-base font-semibold text-white shadow-[0_12px_28px_rgba(0,73,172,0.28)] ring-1 ring-white/40 dark:ring-white/15"
-            aria-hidden="true"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(0,73,172,0.95) 0%, rgba(72,128,255,0.95) 55%, rgba(139,181,255,0.9) 100%)',
-            }}
-          >
+          <span className="sidebar-brand flex h-12 w-12 flex-shrink-0 items-center justify-center text-sm" aria-hidden="true">
             WA
           </span>
           {showSidebarHeader && (
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary/90 dark:text-slate-300">
+              <p
+                className="text-[11px] font-semibold uppercase tracking-[0.3em]"
+                style={{ color: 'var(--accent)' }}
+              >
                 {BRAND_NAME}
               </p>
               {sidebarTitle && (
-                <h1 className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{sidebarTitle}</h1>
+                <h1 className="truncate text-base font-semibold" style={{ color: 'var(--text)' }}>
+                  {sidebarTitle}
+                </h1>
               )}
-              {showBaselineText && <p className="text-xs text-slate-500 dark:text-slate-400">{baseline}</p>}
+              {showBaselineText && (
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  {baseline}
+                </p>
+              )}
             </div>
           )}
         </div>
         {variant === 'mobile' && (
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Navigation</span>
+            <span className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--muted)' }}>
+              Navigation
+            </span>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-500 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              style={{ color: 'var(--accent)' }}
             >
               Fermer
             </button>
           </div>
         )}
       </div>
-      <nav className="space-y-4 text-sm font-medium text-slate-600">
+      <nav className="space-y-4 text-sm font-medium">
         <ul className="space-y-1.5">
           {displayedLinks.map((link, index) => {
             return (
@@ -232,28 +237,26 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                     onDrop={handleDrop}
                     onKeyDown={handleItemKeyDown(index)}
                     className={clsx(
-                      'sidebar-reorder group flex items-center justify-between rounded-2xl px-3 py-2 text-slate-600 transition-all duration-150 ease-out dark:text-slate-200',
-                      draggingKey === link.to
-                        ? 'ring-1 ring-primary/40 shadow-[0_8px_18px_rgba(0,73,172,0.25)]'
-                        : 'hover:text-primary dark:hover:text-primary'
+                      'sidebar-reorder group flex items-center justify-between rounded-2xl px-3 py-2 transition-all duration-150 ease-out',
+                      draggingKey === link.to ? 'ring-1 ring-primary/40' : undefined
                     )}
                     aria-grabbed={draggingKey === link.to}
                     aria-label={`Réordonner ${link.label}`}
                   >
                     <div className="flex items-center gap-3">
-                      <span
-                        className="select-none text-base text-slate-400 transition group-active:text-primary"
-                        aria-hidden
-                      >
+                      <span className="select-none text-base" aria-hidden style={{ color: 'var(--muted)' }}>
                         ≡
                       </span>
-                      <span className="tracking-[0.06em] text-slate-600 dark:text-slate-200">{link.label}</span>
+                      <span className="tracking-[0.06em]" style={{ color: 'var(--text)' }}>
+                        {link.label}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
                       type="button"
                       onClick={() => handleMoveUp(index)}
-                      className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+                      className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"
+                      style={{ color: 'var(--accent)' }}
                       disabled={index === 0}
                       aria-label={`Déplacer ${link.label} vers le haut`}
                     >
@@ -262,7 +265,8 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                     <button
                       type="button"
                       onClick={() => handleMoveDown(index)}
-                      className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+                      className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"
+                      style={{ color: 'var(--accent)' }}
                       disabled={index === displayedLinks.length - 1}
                       aria-label={`Déplacer ${link.label} vers le bas`}
                     >
@@ -276,7 +280,7 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                     end={link.to === '/'}
                     className={({ isActive }) =>
                       clsx(
-                        'sidebar-link group flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold tracking-wide transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                        'sidebar-link flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
                         isActive ? 'sidebar-link--active' : 'sidebar-link--idle'
                       )
                     }
@@ -284,18 +288,9 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                   >
                     {({ isActive }) => (
                       <>
-                        <span className="flex-1 truncate text-[13px] font-semibold tracking-wide dark:text-slate-100">
+                        <span className="flex-1 truncate text-[13px] font-semibold tracking-wide">
                           {link.label}
                         </span>
-                        <span
-                          className={clsx(
-                            'h-1.5 w-1.5 flex-shrink-0 rounded-full transition-colors duration-200 ease-out',
-                            isActive
-                              ? 'bg-white/90 shadow-[0_0_0_2px_rgba(255,255,255,0.3)] dark:bg-white/80'
-                              : 'bg-slate-300 group-hover:bg-primary/60 dark:bg-slate-600 dark:group-hover:bg-white/70'
-                          )}
-                          aria-hidden
-                        />
                       </>
                     )}
                   </NavLink>
@@ -333,9 +328,12 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
             <button
               type="button"
               onClick={handleStartEditing}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              style={{ color: 'var(--accent)' }}
             >
-              <span aria-hidden className="text-sm text-slate-400">≡</span>
+              <span aria-hidden className="text-sm" style={{ color: 'var(--muted)' }}>
+                ≡
+              </span>
               Modifier l'ordre
             </button>
           )}

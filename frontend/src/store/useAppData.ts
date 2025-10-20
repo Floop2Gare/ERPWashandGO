@@ -2,14 +2,7 @@ import { create } from 'zustand';
 import { addMinutes, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-import {
-  BRANDING_COLOR_STORAGE_KEY,
-  DEFAULT_BRANDING_COLOR_ID,
-  BRAND_FULL_TITLE,
-  BRAND_NAME,
-  LEGACY_BRANDING_COLOR_STORAGE_KEYS,
-  type BrandingColorId,
-} from '../lib/branding';
+import { BRAND_FULL_TITLE, BRAND_NAME } from '../lib/branding';
 import {
   APP_PAGE_OPTIONS,
   USER_ROLE_LABELS,
@@ -396,7 +389,6 @@ type AppState = {
   vatEnabled: boolean;
   vatRate: number;
   theme: ThemeMode;
-  brandingColorId: BrandingColorId;
   sidebarTitlePreference: SidebarTitlePreference;
   emailSignatures: EmailSignature[];
   getCurrentUser: () => AuthUser | null;
@@ -504,8 +496,6 @@ type AppState = {
   setVatRate: (rate: number) => void;
   setTheme: (mode: ThemeMode) => void;
   toggleTheme: () => void;
-  setBrandingColorId: (id: BrandingColorId) => void;
-  resetBrandingColor: () => void;
   createEmailSignature: (
     payload: {
       scope: EmailSignatureScope;
@@ -1053,35 +1043,6 @@ const persistTheme = (mode: ThemeMode) => {
     });
   } catch (error) {
     console.warn('Impossible de sauvegarder le thème sélectionné.', error);
-  }
-};
-
-const resolveInitialBrandingColorId = (): BrandingColorId => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_BRANDING_COLOR_ID;
-  }
-  const stored =
-    window.localStorage.getItem(BRANDING_COLOR_STORAGE_KEY) ??
-    LEGACY_BRANDING_COLOR_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
-  if (!stored) {
-    return DEFAULT_BRANDING_COLOR_ID;
-  }
-  return (
-    ['black', 'blue', 'orange', 'green', 'charcoal'].includes(stored)
-      ? (stored as BrandingColorId)
-      : DEFAULT_BRANDING_COLOR_ID
-  );
-};
-
-const persistBrandingColorId = (id: BrandingColorId) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  try {
-    window.localStorage.setItem(BRANDING_COLOR_STORAGE_KEY, id);
-    LEGACY_BRANDING_COLOR_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
-  } catch (error) {
-    console.warn('Impossible de sauvegarder la couleur de personnalisation.', error);
   }
 };
 
@@ -1995,7 +1956,6 @@ const seedNotificationSource =
     : seedAuthUsers[0]?.notificationPreferences) || initialNotificationPreferences;
 const initialCurrentUserId = resolvedCurrentUser?.id ?? null;
 const initialTheme = resolveInitialTheme();
-const initialBrandingColorId = resolveInitialBrandingColorId();
 const initialSidebarTitlePreference = resolveInitialSidebarTitlePreference();
 export const useAppData = create<AppState>((set, get) => ({
   clients: initialClients,
@@ -2032,7 +1992,6 @@ export const useAppData = create<AppState>((set, get) => ({
   vatEnabled: initialCompanies[0]?.vatEnabled ?? true,
   vatRate: initialVatSettings.rate,
   theme: initialTheme,
-  brandingColorId: initialBrandingColorId,
   sidebarTitlePreference: initialSidebarTitlePreference,
   getCurrentUser: () => {
     const { authUsers, currentUserId } = get();
@@ -3383,18 +3342,6 @@ export const useAppData = create<AppState>((set, get) => ({
       const nextMode: ThemeMode = state.theme === 'light' ? 'dark' : 'light';
       persistTheme(nextMode);
       return { theme: nextMode };
-    });
-  },
-  setBrandingColorId: (id) => {
-    set(() => {
-      persistBrandingColorId(id);
-      return { brandingColorId: id };
-    });
-  },
-  resetBrandingColor: () => {
-    set(() => {
-      persistBrandingColorId(DEFAULT_BRANDING_COLOR_ID);
-      return { brandingColorId: DEFAULT_BRANDING_COLOR_ID };
     });
   },
   setSidebarTitlePreference: (updates) => {

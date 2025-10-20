@@ -88,19 +88,16 @@ const DashboardPage = () => {
       label: 'Prestations totales réalisées',
       value: new Intl.NumberFormat('fr-FR').format(totalPrestations),
       icon: <PrestationsIcon />,
-      accent: 'primary' as const,
     },
     {
       label: 'Chiffre d’affaires total',
       value: formatCurrency(totalRevenue),
       icon: <RevenueIcon />,
-      accent: 'violet' as const,
     },
     {
       label: 'Durée totale de travail',
       value: formatDuration(totalDurationMinutes),
       icon: <DurationIcon />,
-      accent: 'teal' as const,
     },
   ];
 
@@ -110,35 +107,30 @@ const DashboardPage = () => {
       to: '/service',
       description: 'Planifiez vos prestations',
       icon: <ServicesIcon />,
-      accent: 'primary' as const,
     },
     {
       label: 'Achats',
       to: '/achats',
       description: 'Suivi des dépenses',
       icon: <PurchasesIcon />,
-      accent: 'amber' as const,
     },
     {
       label: 'Documents',
       to: '/documents',
       description: 'Bibliothèque centralisée',
       icon: <DocumentsIcon />,
-      accent: 'violet' as const,
     },
     {
       label: 'Leads',
       to: '/lead',
       description: 'Développez votre pipeline',
       icon: <LeadsIcon />,
-      accent: 'teal' as const,
     },
     {
       label: 'Clients',
       to: '/clients',
       description: 'Gérez vos comptes',
       icon: <ClientsIcon />,
-      accent: 'primary' as const,
     },
   ];
 
@@ -156,19 +148,18 @@ const DashboardPage = () => {
 
       <section className="grid gap-4 md:grid-cols-3">
         {kpiCards.map((card) => (
-          <Card
-            key={card.label}
-            padding="lg"
-            tone="accent"
-            accent={card.accent}
-            className="flex items-center gap-4"
-          >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white shadow-[0_12px_28px_rgba(10,23,55,0.3)] backdrop-blur-sm">
+          <Card key={card.label} padding="lg" tone="accent" className="flex items-center gap-4">
+            <span
+              className="flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ background: 'rgba(var(--accent-rgb) / 0.15)', color: 'var(--inverse-text)' }}
+            >
               {card.icon}
             </span>
-            <div className="space-y-1">
-              <p className="text-3xl font-semibold text-white">{card.value}</p>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+            <div className="space-y-1" style={{ color: 'var(--inverse-text)' }}>
+              <p className="text-3xl font-semibold" style={{ color: 'var(--inverse-text)' }}>
+                {card.value}
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--inverse-text)' }}>
                 {card.label}
               </p>
             </div>
@@ -186,15 +177,18 @@ const DashboardPage = () => {
             <Link
               key={link.to}
               to={link.to}
-              data-accent={link.accent}
-              className="quick-link group flex flex-col items-center gap-3 px-4 py-6 text-center text-slate-700 transition duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:text-slate-200"
+              className="quick-link group flex flex-col items-center gap-3 px-4 py-6 text-center transition duration-200 ease-out focus-visible:outline-none"
             >
               <span className="quick-link__icon text-xl">
                 {link.icon}
               </span>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{link.label}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-300">{link.description}</p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+                  {link.label}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  {link.description}
+                </p>
               </div>
             </Link>
           ))}
