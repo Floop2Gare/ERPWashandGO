@@ -289,31 +289,26 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-gradient-to-r from-white/92 via-sky-50/65 to-white/92 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-slate-800/80 dark:from-slate-950/92 dark:via-slate-900/90 dark:to-slate-950/94">
+    <header className="sticky top-0 z-30 border-b border-border bg-bg">
       <div className="grid w-full gap-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-6">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onMenuToggle}
-            className="group inline-flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 lg:hidden"
             aria-label="Ouvrir le menu"
           >
             <span className="sr-only">Ouvrir le menu</span>
-            <span className="h-[1.5px] w-5 bg-slate-500 transition group-hover:bg-primary" />
-            <span className="h-[1.5px] w-5 bg-slate-500 transition group-hover:bg-primary" />
-            <span className="h-[1.5px] w-5 bg-slate-500 transition group-hover:bg-primary" />
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
+              <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+            </svg>
           </button>
           <div className="space-y-0.5 text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary/90 dark:text-slate-200">
-              {BRAND_NAME}
-            </p>
-            {showBaseline && <p className="text-xs text-slate-500 dark:text-slate-400">{baseline}</p>}
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary">{BRAND_NAME}</p>
+            {showBaseline && <p className="text-xs text-muted">{baseline}</p>}
           </div>
         </div>
-        <form
-          onSubmit={handleSubmit}
-          className="order-3 w-full lg:order-none lg:mx-auto lg:max-w-2xl"
-        >
+        <form onSubmit={handleSubmit} className="order-3 w-full lg:order-none lg:mx-auto lg:max-w-2xl">
           <label htmlFor="global-search" className="sr-only">
             Rechercher
           </label>
@@ -326,18 +321,18 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
               onFocus={() => setIsFocused(true)}
               onBlur={handleBlur}
               placeholder="Rechercher clients, prestations ou documents"
-              className="w-full rounded-2xl border border-slate-200/70 bg-white/95 px-4 py-2.5 text-sm text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 dark:border-slate-700/70 dark:bg-slate-900/80 dark:text-slate-100"
+              className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               autoComplete="off"
             />
             {isFocused && trimmedQuery && (
-              <div className="absolute left-0 right-0 z-40 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-slate-200/70 bg-white/95 shadow-[0_24px_48px_rgba(15,23,42,0.18)] backdrop-blur-lg dark:border-slate-700/70 dark:bg-slate-900/90">
+              <div className="absolute left-0 right-0 z-40 mt-2 max-h-80 overflow-y-auto rounded-xl border border-border bg-bg shadow-sm">
                 {flatResults.length === 0 ? (
-                  <p className="px-4 py-3 text-xs text-slate-500">Aucun résultat</p>
+                  <p className="px-4 py-3 text-xs text-muted">Aucun résultat</p>
                 ) : (
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-border/60">
                     {groups.map((group) => (
                       <div key={group.label} className="py-2">
-                        <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">
+                        <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted">
                           {group.label}
                         </p>
                         <ul className="space-y-1">
@@ -346,14 +341,14 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
                               <button
                                 type="button"
                                 onMouseDown={(event) => handleResultMouseDown(event, item)}
-                                className="group flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-primary/5"
+                                className="group flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-text transition-colors hover:bg-surface"
                               >
                                 <span>
-                                  <span className="block font-medium text-slate-900 group-hover:text-primary">{item.title}</span>
-                                  <span className="mt-0.5 block text-xs text-slate-500">{item.subtitle}</span>
+                                  <span className="block font-medium text-text group-hover:text-primary">{item.title}</span>
+                                  <span className="mt-0.5 block text-xs text-muted">{item.subtitle}</span>
                                 </span>
                                 {item.badge && (
-                                  <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                                  <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-muted">
                                     {item.badge}
                                   </span>
                                 )}
@@ -370,14 +365,14 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
           </div>
         </form>
         <div className="flex items-center justify-end gap-3">
-          <div className="hidden text-right text-[11px] uppercase tracking-[0.28em] text-slate-400 lg:block">
-            <p className="text-sm font-semibold text-slate-700">{displayName}</p>
-            <p className="text-[10px] text-slate-500">{displayRole}</p>
+          <div className="hidden text-right text-[11px] uppercase tracking-[0.28em] text-muted lg:block">
+            <p className="text-sm font-semibold text-text">{displayName}</p>
+            <p className="text-[10px] text-muted">{displayRole}</p>
           </div>
           <button
             type="button"
             onClick={toggleTheme}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-transparent bg-gradient-to-br from-primary/15 via-white/60 to-white/90 text-primary shadow-[0_10px_22px_rgba(15,23,42,0.18)] transition hover:shadow-[0_16px_30px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-slate-700/60 dark:from-slate-900/60 dark:via-slate-900/70 dark:to-slate-900/40 dark:text-slate-200"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
           >
             {theme === 'dark' ? <IconSun /> : <IconMoon />}
@@ -386,7 +381,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
             <button
               type="button"
               onClick={() => setIsUserMenuOpen((open) => !open)}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-600 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg text-sm font-semibold text-text transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               aria-haspopup="menu"
               aria-expanded={isUserMenuOpen}
               aria-label={isUserMenuOpen ? 'Fermer le menu utilisateur' : 'Ouvrir le menu utilisateur'}
@@ -404,16 +399,14 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
             {isUserMenuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 z-50 mt-3 w-56 rounded-2xl border border-slate-200 bg-white p-2 text-sm text-slate-700 shadow-xl"
+                className="absolute right-0 z-50 mt-3 w-56 rounded-xl border border-border bg-bg p-2 text-sm text-text shadow-sm"
               >
-                <div className="px-3 pb-2 text-xs uppercase tracking-[0.28em] text-slate-400">
-                  {displayName}
-                </div>
+                <div className="px-3 pb-2 text-xs uppercase tracking-[0.28em] text-muted">{displayName}</div>
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => handleMenuNavigate('/parametres?tab=profil')}
-                  className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition hover:bg-primary/5 hover:text-primary"
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-surface hover:text-primary"
                 >
                   Mon profil
                 </button>
@@ -421,7 +414,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
                   type="button"
                   role="menuitem"
                   onClick={() => handleMenuNavigate('/parametres')}
-                  className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition hover:bg-primary/5 hover:text-primary"
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-surface hover:text-primary"
                 >
                   Paramètres
                 </button>
@@ -433,7 +426,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
                     logout();
                     navigate('/connexion');
                   }}
-                  className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-surface hover:text-primary"
                 >
                   Se déconnecter
                 </button>
