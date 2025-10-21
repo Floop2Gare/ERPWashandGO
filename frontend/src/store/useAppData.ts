@@ -109,6 +109,8 @@ export type Engagement = {
   sendHistory: EngagementSendRecord[];
   invoiceNumber: string | null;
   invoiceVatEnabled: boolean | null;
+  quoteNumber: string | null;
+  quoteStatus: CommercialDocumentStatus | null;
   optionOverrides?: Record<string, EngagementOptionOverride>;
 };
 
@@ -281,6 +283,10 @@ export type EmailSignature = {
 
 export type DocumentSource = 'Google Drive' | 'Lien externe' | 'Archive interne';
 
+export type CommercialDocumentKind = 'devis' | 'facture';
+
+export type CommercialDocumentStatus = 'brouillon' | 'envoyé' | 'accepté' | 'refusé' | 'payé';
+
 export type DocumentRecord = {
   id: string;
   title: string;
@@ -296,6 +302,17 @@ export type DocumentRecord = {
   size?: string;
   fileName?: string;
   fileData?: string;
+  kind?: CommercialDocumentKind;
+  engagementId?: string | null;
+  number?: string | null;
+  status?: CommercialDocumentStatus | null;
+  totalHt?: number | null;
+  totalTtc?: number | null;
+  vatAmount?: number | null;
+  vatRate?: number | null;
+  issueDate?: string | null;
+  dueDate?: string | null;
+  recipients?: string[];
 };
 
 export type DocumentWorkspace = {
@@ -1522,6 +1539,8 @@ const initialEngagements: Engagement[] = [
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: null,
+    quoteStatus: null,
   },
   {
     id: 'e2',
@@ -1539,6 +1558,8 @@ const initialEngagements: Engagement[] = [
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: 'DEV-202404-0001',
+    quoteStatus: 'envoyé',
   },
   {
     id: 'e3',
@@ -1556,6 +1577,8 @@ const initialEngagements: Engagement[] = [
     sendHistory: [],
     invoiceNumber: 'FAC-202404-0001',
     invoiceVatEnabled: true,
+    quoteNumber: null,
+    quoteStatus: null,
   },
   {
     id: 'e4',
@@ -1573,6 +1596,8 @@ const initialEngagements: Engagement[] = [
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: null,
+    quoteStatus: null,
   },
   {
     id: 'e5',
@@ -1590,6 +1615,8 @@ const initialEngagements: Engagement[] = [
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: null,
+    quoteStatus: null,
   },
 ];
 
@@ -2524,6 +2551,13 @@ export const useAppData = create<AppState>((set, get) => ({
         Object.prototype.hasOwnProperty.call(payload, 'invoiceVatEnabled')
           ? payload.invoiceVatEnabled ?? null
           : null,
+      quoteNumber: payload.quoteNumber ?? null,
+      quoteStatus:
+        Object.prototype.hasOwnProperty.call(payload, 'quoteStatus')
+          ? payload.quoteStatus ?? null
+          : payload.kind === 'devis'
+          ? 'brouillon'
+          : null,
       id: `e${Date.now()}`,
     };
     set((state) => {
@@ -2553,6 +2587,8 @@ export const useAppData = create<AppState>((set, get) => ({
             updates.additionalCharge !== undefined ? updates.additionalCharge : engagement.additionalCharge,
           contactIds: updates.contactIds ? [...updates.contactIds] : engagement.contactIds,
           sendHistory: updates.sendHistory ? [...updates.sendHistory] : engagement.sendHistory,
+          quoteNumber: updates.quoteNumber !== undefined ? updates.quoteNumber : engagement.quoteNumber,
+          quoteStatus: updates.quoteStatus !== undefined ? updates.quoteStatus : engagement.quoteStatus,
         };
         updated = next;
         return next;
@@ -2587,6 +2623,10 @@ export const useAppData = create<AppState>((set, get) => ({
           ...engagement,
           contactIds: mergedContacts,
           sendHistory: [record, ...engagement.sendHistory],
+          quoteStatus:
+            engagement.kind === 'devis' && engagement.quoteStatus !== 'accepté' && engagement.quoteStatus !== 'refusé'
+              ? 'envoyé'
+              : engagement.quoteStatus,
         };
       }),
     }));
@@ -2950,6 +2990,17 @@ export const useAppData = create<AppState>((set, get) => ({
     const size = payload.size?.trim() || undefined;
     const fileName = payload.fileName?.trim() || undefined;
     const fileData = payload.fileData?.trim() || undefined;
+    const kind = payload.kind ?? undefined;
+    const engagementId = payload.engagementId ?? null;
+    const number = payload.number ?? null;
+    const status = payload.status ?? null;
+    const totalHt = payload.totalHt ?? null;
+    const totalTtc = payload.totalTtc ?? null;
+    const vatAmount = payload.vatAmount ?? null;
+    const vatRate = payload.vatRate ?? null;
+    const issueDate = payload.issueDate ?? null;
+    const dueDate = payload.dueDate ?? null;
+    const recipients = payload.recipients ?? undefined;
     const newDocument: DocumentRecord = {
       id: `doc-${Date.now()}`,
       title,
@@ -2965,6 +3016,17 @@ export const useAppData = create<AppState>((set, get) => ({
       size,
       fileName,
       fileData,
+      kind,
+      engagementId,
+      number,
+      status,
+      totalHt,
+      totalTtc,
+      vatAmount,
+      vatRate,
+      issueDate,
+      dueDate,
+      recipients,
     };
     set((state) => ({
       documents: [newDocument, ...state.documents],
@@ -3009,6 +3071,39 @@ export const useAppData = create<AppState>((set, get) => ({
         const fileData = Object.prototype.hasOwnProperty.call(updates, 'fileData')
           ? updates.fileData?.trim() || undefined
           : document.fileData;
+        const kind = Object.prototype.hasOwnProperty.call(updates, 'kind')
+          ? updates.kind ?? undefined
+          : document.kind;
+        const engagementId = Object.prototype.hasOwnProperty.call(updates, 'engagementId')
+          ? updates.engagementId ?? null
+          : document.engagementId ?? null;
+        const number = Object.prototype.hasOwnProperty.call(updates, 'number')
+          ? updates.number ?? null
+          : document.number ?? null;
+        const status = Object.prototype.hasOwnProperty.call(updates, 'status')
+          ? updates.status ?? null
+          : document.status ?? null;
+        const totalHt = Object.prototype.hasOwnProperty.call(updates, 'totalHt')
+          ? updates.totalHt ?? null
+          : document.totalHt ?? null;
+        const totalTtc = Object.prototype.hasOwnProperty.call(updates, 'totalTtc')
+          ? updates.totalTtc ?? null
+          : document.totalTtc ?? null;
+        const vatAmount = Object.prototype.hasOwnProperty.call(updates, 'vatAmount')
+          ? updates.vatAmount ?? null
+          : document.vatAmount ?? null;
+        const vatRate = Object.prototype.hasOwnProperty.call(updates, 'vatRate')
+          ? updates.vatRate ?? null
+          : document.vatRate ?? null;
+        const issueDate = Object.prototype.hasOwnProperty.call(updates, 'issueDate')
+          ? updates.issueDate ?? null
+          : document.issueDate ?? null;
+        const dueDate = Object.prototype.hasOwnProperty.call(updates, 'dueDate')
+          ? updates.dueDate ?? null
+          : document.dueDate ?? null;
+        const recipients = Object.prototype.hasOwnProperty.call(updates, 'recipients')
+          ? updates.recipients ?? undefined
+          : document.recipients;
 
         const next: DocumentRecord = {
           ...document,
@@ -3026,6 +3121,17 @@ export const useAppData = create<AppState>((set, get) => ({
           size,
           fileName,
           fileData,
+          kind,
+          engagementId,
+          number,
+          status,
+          totalHt,
+          totalTtc,
+          vatAmount,
+          vatRate,
+          issueDate,
+          dueDate,
+          recipients,
         };
 
         updated = next;
