@@ -1802,6 +1802,10 @@ const ServicePage = () => {
       });
 
       if (mode === 'download') {
+        if (typeof window !== 'undefined') {
+          const blobUrl = pdf.output('bloburl');
+          window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        }
         pdf.save(`${documentNumber}.pdf`);
       }
 
@@ -1836,6 +1840,10 @@ const ServicePage = () => {
           return;
         }
         if (emailResult.status === 'fallback') {
+          if (typeof window !== 'undefined') {
+            const blobUrl = pdf.output('bloburl');
+            window.open(blobUrl, '_blank', 'noopener,noreferrer');
+          }
           pdf.save(`${documentNumber}.pdf`);
           setFeedback(
             emailResult.message ??
