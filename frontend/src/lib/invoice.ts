@@ -150,6 +150,7 @@ export const generateInvoicePdf = ({
   client,
   service,
   options,
+  optionOverrides,
   additionalCharge,
   vatRate,
   vatEnabled,

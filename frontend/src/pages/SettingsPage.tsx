@@ -358,6 +358,16 @@ const SettingsPage = () => {
     }
   }, [detailState, sidebarTitlePreference]);
 
+  const selectedCatalogService = useMemo(() => {
+    if (!services.length) {
+      return null;
+    }
+    if (selectedCatalogServiceId) {
+      return services.find((service) => service.id === selectedCatalogServiceId) ?? services[0];
+    }
+    return services[0];
+  }, [selectedCatalogServiceId, services]);
+
   useEffect(() => {
     if (detailState?.section !== 'catalog') {
       setCatalogServiceForm(buildCatalogServiceForm(null));
@@ -493,16 +503,6 @@ const SettingsPage = () => {
         return profileSectionRef;
     }
   };
-
-  const selectedCatalogService = useMemo(() => {
-    if (!services.length) {
-      return null;
-    }
-    if (selectedCatalogServiceId) {
-      return services.find((service) => service.id === selectedCatalogServiceId) ?? services[0];
-    }
-    return services[0];
-  }, [selectedCatalogServiceId, services]);
 
   useEffect(() => {
     if (selectedCatalogService) {
@@ -1676,8 +1676,7 @@ const SettingsPage = () => {
                               <div className="flex items-center justify-end gap-1 text-slate-500">
                                 <RowActionButton
                                   label="Modifier"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
+                                  onClick={() => {
                                     openCatalogServiceDetail(service);
                                   }}
                                 >
@@ -1685,8 +1684,7 @@ const SettingsPage = () => {
                                 </RowActionButton>
                                 <RowActionButton
                                   label="Dupliquer"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
+                                  onClick={() => {
                                     handleCatalogServiceDuplicate(service);
                                   }}
                                 >
@@ -1695,8 +1693,7 @@ const SettingsPage = () => {
                                 <RowActionButton
                                   label="Supprimer"
                                   tone="danger"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
+                                  onClick={() => {
                                     handleCatalogServiceDelete(service.id);
                                   }}
                                 >
@@ -1844,8 +1841,7 @@ const SettingsPage = () => {
                                   <div className="flex items-center justify-end gap-1 text-slate-500">
                                     <RowActionButton
                                       label="Modifier"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
+                                      onClick={() => {
                                         openCatalogItemDetail(selectedCatalogService.id, option);
                                       }}
                                     >
@@ -1854,8 +1850,7 @@ const SettingsPage = () => {
                                     <RowActionButton
                                       label="Supprimer"
                                       tone="danger"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
+                                      onClick={() => {
                                         handleCatalogItemDelete(selectedCatalogService.id, option.id);
                                       }}
                                     >
