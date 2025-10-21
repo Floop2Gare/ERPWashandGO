@@ -126,7 +126,8 @@ const LoginPage = () => {
             aria-pressed={theme === 'dark'}
             aria-label={`Basculer en mode ${theme === 'dark' ? 'clair' : 'sombre'}`}
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 backdrop-blur-sm transition hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-900/90"
+            className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            style={{ color: 'var(--accent)', background: 'var(--surface)' }}
           >
             <span aria-hidden="true">{theme === 'dark' ? '🌙' : '☀️'}</span>
             <span>{theme === 'dark' ? 'Sombre' : 'Clair'}</span>
@@ -134,12 +135,8 @@ const LoginPage = () => {
         </div>
         <main className="flex flex-1 items-center justify-center px-4 py-16">
           <div
-            className="w-full max-w-md rounded-2xl border px-8 py-10 shadow-lg backdrop-blur-sm"
-            style={{
-              background: 'rgba(var(--washingo-surface-rgb) / 0.9)',
-              borderColor: 'var(--washingo-border)',
-              boxShadow: '0 24px 60px rgba(12, 18, 32, 0.25)',
-            }}
+            className="w-full max-w-md rounded-2xl border px-8 py-10 shadow-lg"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
           >
             <div className="space-y-2 text-center">
               <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Connexion</h1>

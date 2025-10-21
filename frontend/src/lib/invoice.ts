@@ -9,6 +9,7 @@ import {
   ServiceOption,
   EngagementStatus,
   SupportType,
+  EngagementOptionOverride,
 } from '../store/useAppData';
 import { formatCurrency, formatDuration } from './format';
 
@@ -20,6 +21,7 @@ export interface GenerateInvoicePayload {
   client: Client;
   service: Service;
   options: ServiceOption[];
+  optionOverrides?: Record<string, EngagementOptionOverride>;
   additionalCharge: number;
   vatRate: number;
   vatEnabled: boolean;
@@ -148,6 +150,7 @@ export const generateInvoicePdf = ({
   client,
   service,
   options,
+  optionOverrides,
   additionalCharge,
   vatRate,
   vatEnabled,
@@ -176,13 +179,25 @@ export const generateInvoicePdf = ({
   const statusLabel = formatStatusLabel(status);
   const paymentLabel = paymentMethod?.trim() ?? '';
 
-  const invoiceLines: InvoiceLine[] = options.map((option) => ({
-    label: option.label,
-    detail: option.duration ? `Durée : ${formatDuration(option.duration)}` : null,
-    quantity: 1,
-    unitPrice: option.price,
-    total: option.price,
-  }));
+  const invoiceLines: InvoiceLine[] = options.map((option) => {
+    const override = optionOverrides?.[option.id];
+    const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+    const durationValue =
+      override?.durationMin !== undefined && override.durationMin >= 0
+        ? override.durationMin
+        : option.defaultDurationMin;
+    const unitPrice =
+      override?.unitPriceHT !== undefined && override.unitPriceHT >= 0
+        ? override.unitPriceHT
+        : option.unitPriceHT;
+    return {
+      label: option.label,
+      detail: durationValue ? `Durée : ${formatDuration(durationValue)}` : null,
+      quantity,
+      unitPrice,
+      total: roundCurrency(unitPrice * quantity),
+    } satisfies InvoiceLine;
+  });
 
   if (additionalCharge > 0) {
     invoiceLines.push({

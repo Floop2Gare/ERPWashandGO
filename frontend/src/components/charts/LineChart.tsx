@@ -62,8 +62,8 @@ const LineChartComponent = ({ data, className, getTooltip }: LineChartProps) => 
       >
         <defs>
           <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--washingo-chart-point)" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="var(--washingo-chart-point)" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--chart-point)" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="var(--chart-point)" stopOpacity="0" />
           </linearGradient>
         </defs>
         <rect
@@ -72,14 +72,14 @@ const LineChartComponent = ({ data, className, getTooltip }: LineChartProps) => 
           width={width}
           height={height}
           fill="none"
-          stroke="var(--washingo-chart-grid)"
+          stroke="var(--chart-grid)"
           strokeWidth="1"
         />
         <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
         <path
           d={path}
           fill="none"
-          stroke="var(--washingo-chart-point)"
+          stroke="var(--chart-point)"
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -87,7 +87,7 @@ const LineChartComponent = ({ data, className, getTooltip }: LineChartProps) => 
           const [x, y] = point.split(',').map(Number);
           const tooltip = getTooltip?.(data[index], index);
           return (
-            <circle key={data[index].label} cx={x} cy={y} r={3} fill="var(--washingo-chart-point)">
+            <circle key={data[index].label} cx={x} cy={y} r={3} fill="var(--chart-point)">
               {tooltip ? <title>{tooltip}</title> : null}
             </circle>
           );

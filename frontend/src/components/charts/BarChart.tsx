@@ -40,7 +40,7 @@ const BarChartComponent = ({ data, className, getTooltip }: BarChartProps) => {
           width={width}
           height={chartHeight}
           fill="none"
-          stroke="var(--washingo-chart-grid)"
+          stroke="var(--chart-grid)"
           strokeWidth="1"
         />
         {data.map((point, index) => {
@@ -58,7 +58,7 @@ const BarChartComponent = ({ data, className, getTooltip }: BarChartProps) => {
               width={barWidth}
               height={barHeight}
               rx={4}
-              fill="var(--washingo-chart-point)"
+              fill="var(--chart-point)"
               opacity={opacity}
             >
               {tooltip ? <title>{tooltip}</title> : null}
