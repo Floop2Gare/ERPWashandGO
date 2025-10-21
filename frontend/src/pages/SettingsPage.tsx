@@ -1570,20 +1570,19 @@ const SettingsPage = () => {
                   Constituez un catalogue unifié pour accélérer la création d’interventions, devis et factures.
                 </p>
               </div>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card padding="lg" className="space-y-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold text-slate-900">Catalogue services</h3>
-                      <p className="text-xs text-slate-500">
-                        Sélectionnez un service pour afficher ses prestations associées.
-                      </p>
-                    </div>
+              <div className="space-y-6">
+                <Card
+                  padding="lg"
+                  title="Catalogue services"
+                  description="Sélectionnez un service pour afficher ses prestations associées."
+                  action={
                     <Button size="sm" onClick={() => openCatalogServiceDetail(null)}>
                       <IconPlus />
                       Nouveau service
                     </Button>
-                  </div>
+                  }
+                  className="space-y-4"
+                >
                   <div className="flex flex-wrap items-center gap-3">
                     <input
                       value={catalogServiceQuery}
@@ -1729,25 +1728,24 @@ const SettingsPage = () => {
                     </div>
                   </div>
                 </Card>
-                <Card padding="lg" className="space-y-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold text-slate-900">
-                        {selectedCatalogService ? selectedCatalogService.name : 'Prestations'}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {selectedCatalogService
-                          ? 'Réglez les durées et tarifs par défaut de chaque prestation.'
-                          : 'Sélectionnez un service pour configurer ses prestations.'}
-                      </p>
-                    </div>
-                    {selectedCatalogService && (
+                <Card
+                  padding="lg"
+                  title={selectedCatalogService ? selectedCatalogService.name : 'Prestations du service'}
+                  description={
+                    selectedCatalogService
+                      ? 'Réglez les durées et tarifs par défaut de chaque prestation.'
+                      : 'Sélectionnez un service dans le catalogue pour gérer ses prestations associées.'
+                  }
+                  action={
+                    selectedCatalogService ? (
                       <Button size="sm" onClick={() => openCatalogItemDetail(selectedCatalogService.id)}>
                         <IconPlus />
                         Ajouter prestation
                       </Button>
-                    )}
-                  </div>
+                    ) : undefined
+                  }
+                  className="space-y-4"
+                >
                   {selectedCatalogService ? (
                     <>
                       <div className="flex flex-wrap items-center gap-3">
