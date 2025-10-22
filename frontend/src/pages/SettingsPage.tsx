@@ -1638,7 +1638,7 @@ const SettingsPage = () => {
                                 )}
                               </button>
                             </th>
-                            <th className="data-table__header-cell data-table__header-cell--numeric">
+                            <th className="data-table__header-cell data-table__header-cell--numeric data-table__header-cell--optional">
                               <button
                                 type="button"
                                 onClick={() => toggleCatalogServiceSort('count')}
@@ -1682,7 +1682,7 @@ const SettingsPage = () => {
                                   {service.active ? 'Actif' : 'Inactif'}
                                 </span>
                               </td>
-                              <td className="data-table__cell data-table__cell--numeric">
+                              <td className="data-table__cell data-table__cell--numeric data-table__cell--optional">
                                 {service.options.length}
                               </td>
                               <td className="data-table__cell data-table__cell--actions">
@@ -1804,7 +1804,7 @@ const SettingsPage = () => {
                                   </button>
                                 </th>
                                 {vatGloballyEnabled && (
-                                  <th className="data-table__header-cell data-table__header-cell--numeric">
+                                  <th className="data-table__header-cell data-table__header-cell--numeric data-table__header-cell--optional">
                                     <button
                                       type="button"
                                       onClick={() => toggleCatalogItemSort('tva')}
@@ -1854,7 +1854,7 @@ const SettingsPage = () => {
                                     {formatCurrency(option.unitPriceHT)}
                                   </td>
                                   {vatGloballyEnabled && (
-                                    <td className="data-table__cell data-table__cell--numeric">
+                                    <td className="data-table__cell data-table__cell--numeric data-table__cell--optional">
                                       {option.tvaPct !== undefined && option.tvaPct !== null ? `${option.tvaPct} %` : '—'}
                                     </td>
                                   )}
