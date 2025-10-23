@@ -2826,40 +2826,6 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
               </p>
             )}
             <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  if (selectedEngagement) {
-                    void handleGenerateQuote(selectedEngagement);
-                  }
-                }}
-              >
-                {selectedEngagement?.kind === 'devis' ? 'Télécharger le devis' : 'Créer un devis'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (selectedEngagement) {
-                    void handleGenerateQuote(selectedEngagement, 'email');
-                  }
-                }}
-              >
-                {selectedEngagement?.kind === 'devis' ? 'Envoyer le devis' : 'Créer et envoyer un devis'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  void handleCreateService({ sendAsQuote: true });
-                }}
-              >
-                Créer et envoyer un devis
-              </Button>
               <Button type="submit" size="sm">
                 Créer le service
               </Button>
@@ -3308,44 +3274,6 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  if (selectedEngagement) {
-                    void handleGenerateInvoice(selectedEngagement);
-                  }
-                }}
-              >
-                {selectedEngagement.kind === 'facture' ? 'Télécharger la facture' : 'Créer la facture'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (selectedEngagement) {
-                    void handleGenerateInvoice(selectedEngagement, 'email');
-                  }
-                }}
-              >
-                {selectedEngagement.kind === 'facture' ? 'Envoyer la facture' : 'Créer et envoyer la facture'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  openMailForService(
-                    selectedEngagement,
-                    editSelectedService?.name ?? `Service ${BRAND_NAME}`,
-                    editClient ?? undefined
-                  )
-                }
-              >
-                Envoyer infos service
-              </Button>
               <Button type="submit" size="sm">
                 Mettre à jour
               </Button>
