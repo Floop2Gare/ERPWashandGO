@@ -1806,7 +1806,7 @@ const ServicePage = () => {
       }
 
       const updated = updateEngagement(engagement.id, {
-        status: mode === 'email' ? 'envoyé' : engagement.status === 'facture' ? engagement.status : 'brouillon',
+        status: mode === 'email' ? 'envoyé' : engagement.status ?? 'brouillon',
         kind: 'devis',
         companyId: company.id,
         quoteNumber: documentNumber,
@@ -2828,7 +2828,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   }
                 }}
               >
-                {selectedEngagement.kind === 'devis' ? 'Télécharger le devis' : 'Créer un devis'}
+                {selectedEngagement?.kind === 'devis' ? 'Télécharger le devis' : 'Créer un devis'}
               </Button>
               <Button
                 type="button"
@@ -2840,7 +2840,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   }
                 }}
               >
-                {selectedEngagement.kind === 'devis' ? 'Envoyer le devis' : 'Créer et envoyer un devis'}
+                {selectedEngagement?.kind === 'devis' ? 'Envoyer le devis' : 'Créer et envoyer un devis'}
               </Button>
               <Button
                 type="button"
