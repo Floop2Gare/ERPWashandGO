@@ -6,6 +6,7 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-feature-settings: 'liga' 1, 'kern' 1;
   color-scheme: light;
+  --scale: 1;
   --bg: #f7f8fb;
   --bg-rgb: 247 248 251;
   --surface: #ffffff;
@@ -34,6 +35,22 @@
   --chart-grid: rgba(26, 26, 26, 0.12);
   --chart-fill: rgba(var(--accent-rgb) / 0.12);
   --chart-point: var(--accent);
+}
+
+@media (max-width: 1440px) {
+  :root {
+    --scale: 0.9;
+  }
+}
+
+@media (max-width: 1366px) {
+  :root {
+    --scale: 0.8;
+  }
+}
+
+html {
+  font-size: calc(16px * var(--scale));
 }
 
 :root[data-theme='light'] {
@@ -92,12 +109,17 @@
   --chart-point: var(--accent);
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   background: var(--bg);
   color: var(--txt-primary);
-  font-size: 14px;
+  font-size: 1rem;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.24s ease, color 0.24s ease;
@@ -150,10 +172,103 @@ body[data-theme='dark'] ::placeholder {
   transition: background-color 0.24s ease, color 0.24s ease;
 }
 
+.app-shell main {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-shell--compact main,
+.app-shell[data-viewport='compact'] main {
+  padding-left: clamp(0.75rem, 2vw, 1.25rem);
+  padding-right: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+.app-shell--compact .card,
+.app-shell[data-viewport='compact'] .card {
+  padding: clamp(0.75rem, calc(1.2rem * var(--scale)), 1rem);
+}
+
+.app-shell--compact .card header,
+.app-shell[data-viewport='compact'] .card header {
+  gap: clamp(0.5rem, calc(1rem * var(--scale)), 0.75rem);
+}
+
 .sidebar-surface {
   position: relative;
   background: var(--surface);
   border-right: 1px solid var(--border);
+}
+
+.sidebar-desktop {
+  width: clamp(13rem, 15rem * var(--scale), 16rem);
+}
+
+.sidebar-desktop--collapsed {
+  width: clamp(4.25rem, 5rem * var(--scale), 5.5rem);
+}
+
+.sidebar-surface--collapsed {
+  align-items: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.sidebar-surface[data-collapsed='true'] .sidebar-header-text,
+.sidebar-desktop[data-collapsed='true'] .sidebar-footer-actions {
+  display: none;
+}
+
+.sidebar-desktop[data-collapsed='true'] .sidebar-navigation {
+  width: 100%;
+}
+
+.sidebar-link-wrapper {
+  position: relative;
+}
+
+.sidebar-link__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--txt-muted);
+}
+
+.sidebar-link--active .sidebar-link__icon {
+  color: var(--txt-accent);
+}
+
+.sidebar-desktop[data-collapsed='true'] .sidebar-link {
+  justify-content: center;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.sidebar-desktop[data-collapsed='true'] .sidebar-link__label {
+  display: none;
+}
+
+.sidebar-link__tooltip {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%) translateX(0.5rem);
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--txt-primary);
+  white-space: nowrap;
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+.sidebar-desktop[data-collapsed='true'] .sidebar-link-wrapper:hover .sidebar-link__tooltip,
+.sidebar-desktop[data-collapsed='true'] .sidebar-link-wrapper:focus-within .sidebar-link__tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0.75rem);
 }
 
 .sidebar-surface--mobile {
@@ -311,6 +426,11 @@ body[data-theme='dark'] ::placeholder {
   border-bottom: 1px solid var(--border);
 }
 
+.data-table__header-cell--optional,
+.data-table__cell--optional {
+  transition: opacity 0.2s ease;
+}
+
 .data-table thead th:first-child,
 .data-table__header-cell:first-child {
   padding-left: 1.25rem;
@@ -418,6 +538,31 @@ body[data-theme='dark'] ::placeholder {
   text-align: center;
   font-size: 0.75rem;
   color: rgba(var(--txt-muted-rgb) / 0.8);
+}
+
+@media (max-width: 1366px) {
+  .data-table__scroll {
+    max-width: 100%;
+  }
+
+  .data-table thead th,
+  .data-table__header-cell,
+  .data-table td,
+  .data-table__cell {
+    padding: 0.6rem 0.75rem;
+    white-space: normal;
+  }
+
+  .data-table,
+  .data-table__header-cell,
+  .data-table__cell {
+    font-size: 0.8rem;
+  }
+
+  .data-table__header-cell--optional,
+  .data-table__cell--optional {
+    display: none;
+  }
 }
 
 .status-pill {
@@ -656,6 +801,24 @@ body .focus\:ring-primary:focus {
 .washingo-table-row--interactive:focus-visible {
   background-color: rgba(var(--accent-rgb) / 0.08);
   color: var(--txt-primary);
+}
+
+@media (max-width: 1366px) {
+  .washingo-table-container {
+    font-size: 0.85rem;
+  }
+
+  .washingo-table {
+    min-width: 100%;
+  }
+
+  .washingo-table th,
+  .washingo-table td,
+  .washingo-table .table-header-cell,
+  .washingo-table .table-body-cell {
+    padding: 0.6rem 0.75rem;
+    white-space: normal;
+  }
 }
 
 .table-footer {

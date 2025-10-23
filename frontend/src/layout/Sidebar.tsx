@@ -9,17 +9,44 @@ import {
 } from 'react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
+import {
+  IconNavClients,
+  IconNavDashboard,
+  IconNavDocuments,
+  IconNavLeads,
+  IconNavPlanning,
+  IconNavPurchases,
+  IconNavServices,
+  IconNavSettings,
+  IconNavStats,
+  IconNavUsers,
+} from '../components/icons';
 import { SIDEBAR_NAVIGATION_LINKS, SidebarNavigationLink } from './navigationLinks';
 import { useSidebarNavigationStore } from '../store/useSidebarNavigationOrder';
 import { useAppData } from '../store/useAppData';
 import { BRAND_BASELINE, BRAND_NAME } from '../lib/branding';
+import type { AppPageKey } from '../lib/rbac';
 
 interface SidebarProps {
   variant?: 'desktop' | 'mobile';
   open?: boolean;
   onClose?: () => void;
   onNavigate?: () => void;
+  compact?: boolean;
 }
+
+const navigationIcons: Record<AppPageKey, (props: { className?: string }) => JSX.Element> = {
+  dashboard: IconNavDashboard,
+  clients: IconNavClients,
+  leads: IconNavLeads,
+  service: IconNavServices,
+  achats: IconNavPurchases,
+  documents: IconNavDocuments,
+  planning: IconNavPlanning,
+  stats: IconNavStats,
+  parametres: IconNavSettings,
+  'parametres.utilisateurs': IconNavUsers,
+};
 
 const moveItem = (items: SidebarNavigationLink[], from: number, to: number) => {
   const next = [...items];
@@ -28,7 +55,13 @@ const moveItem = (items: SidebarNavigationLink[], from: number, to: number) => {
   return next;
 };
 
-export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate }: SidebarProps) => {
+export const Sidebar = ({
+  variant = 'desktop',
+  open = false,
+  onClose,
+  onNavigate,
+  compact = false,
+}: SidebarProps) => {
   const { order, setOrder, resetOrder, ensureLatest } = useSidebarNavigationStore((state) => ({
     order: state.order,
     setOrder: state.setOrder,
@@ -171,13 +204,16 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
 
   const showSidebarHeader = !sidebarTitlePreference.hidden;
   const sidebarTitle = sidebarTitlePreference.text?.trim() ?? '';
+  const isCollapsed = variant === 'desktop' && compact && !isEditing;
 
   const content = (
     <div
       className={clsx(
-        'sidebar-surface flex h-full min-h-screen flex-col overflow-y-auto px-5 pb-10 pt-8',
-        variant === 'mobile' && 'sidebar-surface--mobile'
+        'sidebar-surface flex h-full min-h-screen flex-col overflow-y-auto pb-10 pt-8',
+        variant === 'mobile' ? 'px-5 sidebar-surface--mobile' : 'px-5',
+        isCollapsed && 'sidebar-surface--collapsed'
       )}
+      data-collapsed={isCollapsed ? 'true' : undefined}
     >
       <div className="mb-8 space-y-4">
         <div className="flex items-center gap-3">
@@ -185,7 +221,7 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
             WA
           </span>
           {showSidebarHeader && (
-            <div className="min-w-0">
+            <div className="sidebar-header-text min-w-0">
                 <p
                   className="text-[11px] font-semibold uppercase tracking-[0.3em]"
                   style={{ color: 'var(--txt-accent)' }}
@@ -275,31 +311,48 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                   </div>
                 </div>
                 ) : (
-                  <NavLink
-                    to={link.to}
-                    end={link.to === '/'}
-                    className={({ isActive }) =>
-                      clsx(
-                        'sidebar-link flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
-                        isActive ? 'sidebar-link--active' : 'sidebar-link--idle'
-                      )
-                    }
-                    onClick={handleNavigate}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <span className="flex-1 truncate text-[13px] font-semibold tracking-wide">
-                          {link.label}
-                        </span>
-                      </>
+                  <div className="sidebar-link-wrapper group">
+                    <NavLink
+                      to={link.to}
+                      end={link.to === '/'}
+                      aria-label={link.label}
+                      title={isCollapsed ? link.label : undefined}
+                      className={({ isActive }) =>
+                        clsx(
+                          'sidebar-link flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                          isActive ? 'sidebar-link--active' : 'sidebar-link--idle'
+                        )
+                      }
+                      onClick={handleNavigate}
+                    >
+                      {({ isActive }) => {
+                        const IconComponent = navigationIcons[link.page];
+                        return (
+                          <>
+                            {IconComponent && (
+                              <span className="sidebar-link__icon" aria-hidden="true">
+                                <IconComponent className={clsx('h-5 w-5', isActive ? 'text-primary' : undefined)} />
+                              </span>
+                            )}
+                            <span className="sidebar-link__label flex-1 truncate text-[13px] font-semibold tracking-wide">
+                              {link.label}
+                            </span>
+                          </>
+                        );
+                      }}
+                    </NavLink>
+                    {isCollapsed && (
+                      <span className="sidebar-link__tooltip" role="tooltip">
+                        {link.label}
+                      </span>
                     )}
-                  </NavLink>
+                  </div>
                 )}
               </li>
             );
           })}
         </ul>
-        <div className="flex flex-wrap items-center gap-2 pt-2">
+        <div className="sidebar-footer-actions flex flex-wrap items-center gap-2 pt-2">
           {isEditing ? (
             <>
               <button
@@ -373,5 +426,15 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
     );
   }
 
-  return <aside className="hidden w-64 flex-shrink-0 lg:block">{content}</aside>;
+  return (
+    <aside
+      className={clsx(
+        'sidebar-desktop hidden flex-shrink-0 transition-[width] duration-200 lg:block',
+        isCollapsed ? 'sidebar-desktop--collapsed' : 'sidebar-desktop--expanded'
+      )}
+      data-collapsed={isCollapsed ? 'true' : undefined}
+    >
+      {content}
+    </aside>
+  );
 };
