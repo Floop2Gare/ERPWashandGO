@@ -36,7 +36,7 @@ import {
   DocumentRecord,
 } from '../store/useAppData';
 import { formatCurrency, formatDate, formatDuration, mergeBodyWithSignature } from '../lib/format';
-import { downloadCsv } from '../lib/csv';
+import { downloadCsv, type CsvValue } from '../lib/csv';
 import { generateInvoicePdf, generateQuotePdf } from '../lib/invoice';
 import { BRAND_NAME } from '../lib/branding';
 import { openEmailComposer, sendDocumentEmail, SendDocumentEmailResult } from '../lib/email';
@@ -850,6 +850,26 @@ const ServicePage = () => {
       return;
     }
 
+    const maxRecipientContacts = filteredEngagements.reduce((max, engagement) => {
+      const client = clientsById.get(engagement.clientId);
+      const count = engagement.contactIds
+        .map((contactId) => client?.contacts.find((contact) => contact.id === contactId) ?? null)
+        .filter((contact): contact is ClientContact => Boolean(contact)).length;
+      return Math.max(max, count);
+    }, 0);
+
+    const contactHeader: string[] = [];
+    for (let index = 0; index < maxRecipientContacts; index += 1) {
+      const labelIndex = index + 1;
+      contactHeader.push(
+        `Contact ${labelIndex} - Nom`,
+        `Contact ${labelIndex} - Email`,
+        `Contact ${labelIndex} - Téléphone`,
+        `Contact ${labelIndex} - Rôles`,
+        `Contact ${labelIndex} - Facturation`
+      );
+    }
+
     const header = [
       'Type de document',
       'Numéro',
@@ -869,8 +889,8 @@ const ServicePage = () => {
       'TVA',
       'Total TTC',
       'TVA activée',
-      'Contacts destinataires',
-      'Emails destinataires',
+      'Nombre de contacts destinataires',
+      ...contactHeader,
       'Dernier envoi',
     ];
 
@@ -900,15 +920,31 @@ const ServicePage = () => {
       const contactDetails = engagement.contactIds
         .map((contactId) => client?.contacts.find((contact) => contact.id === contactId) ?? null)
         .filter((contact): contact is ClientContact => Boolean(contact));
-      const contactsSummary = contactDetails
-        .map((contact) => {
-          const name = `${contact.firstName} ${contact.lastName}`.trim();
-          const coordinates = [contact.email, contact.mobile].filter(Boolean).join(' / ');
-          const roles = contact.roles.length ? `Rôles : ${contact.roles.join(', ')}` : '';
-          return [name || 'Contact', coordinates, roles].filter(Boolean).join(' – ');
-        })
-        .join(' | ');
-      const contactsEmails = contactDetails.map((contact) => contact.email).filter(Boolean).join(' | ');
+      const contactCells: CsvValue[] = [];
+      const contactCount = contactDetails.length;
+      const contactName = (contact: ClientContact) => {
+        const composed = `${contact.firstName} ${contact.lastName}`.trim();
+        if (composed) {
+          return composed;
+        }
+        if (contact.email) {
+          return contact.email;
+        }
+        if (contact.mobile) {
+          return contact.mobile;
+        }
+        return 'Contact';
+      };
+      for (let index = 0; index < maxRecipientContacts; index += 1) {
+        const contact = contactDetails[index] ?? null;
+        contactCells.push(
+          contact ? contactName(contact) : '',
+          contact?.email ?? '',
+          contact?.mobile ?? '',
+          contact && contact.roles.length ? contact.roles.join(', ') : '',
+          contact?.isBillingDefault ? 'Oui' : ''
+        );
+      }
       const lastSendRecord = engagement.sendHistory.reduce<EngagementSendRecord | null>((latest, record) => {
         if (!latest) {
           return record;
@@ -946,8 +982,8 @@ const ServicePage = () => {
         vatEnabledForRow ? formatCurrency(vatAmount) : '',
         formatCurrency(finalTotal),
         vatEnabledForRow ? 'Oui' : 'Non',
-        contactsSummary,
-        contactsEmails,
+        contactCount,
+        ...contactCells,
         lastSendLabel ? `${lastSendLabel}${lastSendContacts ? ` – ${lastSendContacts}` : ''}` : '',
       ];
     });
