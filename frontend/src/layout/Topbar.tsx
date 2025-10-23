@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 import { useAppData } from '../store/useAppData';
-import { BRAND_BASELINE, BRAND_NAME } from '../lib/branding';
+import { BRAND_NAME } from '../lib/branding';
 import { formatCurrency, formatDate } from '../lib/format';
 
 interface TopbarProps {
@@ -65,8 +65,6 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   const initials = `${userProfile.firstName.charAt(0) ?? ''}${userProfile.lastName.charAt(0) ?? ''}`
     .trim()
     .toUpperCase();
-  const baseline = BRAND_BASELINE.trim();
-  const showBaseline = baseline.length > 0;
 
   const serviceById = useMemo(() => new Map(services.map((service) => [service.id, service])), [services]);
   const clientById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
@@ -303,10 +301,6 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
               <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
             </svg>
           </button>
-          <div className="space-y-0.5 text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary">{BRAND_NAME}</p>
-            {showBaseline && <p className="text-xs text-muted">{baseline}</p>}
-          </div>
         </div>
         <form onSubmit={handleSubmit} className="order-3 w-full lg:order-none lg:mx-auto lg:max-w-2xl">
           <label htmlFor="global-search" className="sr-only">
