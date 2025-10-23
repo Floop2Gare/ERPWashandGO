@@ -215,6 +215,8 @@ const MobileTestPage = () => {
     documents,
     addDocument,
     updateDocument,
+    theme,
+    toggleTheme,
   } = useAppData();
 
   const [view, setView] = useState<MobileView>('services');
@@ -479,6 +481,9 @@ const MobileTestPage = () => {
   const heroGreeting = userProfile.firstName ? `Bonjour ${userProfile.firstName}` : 'Bonjour';
   const heroSubtitle = activeCompany ? `Équipe ${activeCompany.name}` : 'Wash&Go terrain';
   const canAccessTimer = Boolean(timerState);
+  const isDarkTheme = theme === 'dark';
+  const themeToggleGlyph = isDarkTheme ? '☾' : '☀︎';
+  const themeToggleLabel = isDarkTheme ? 'Basculer en mode clair' : 'Basculer en mode sombre';
   const navActiveKey: 'services' | 'create' | 'timer' =
     view === 'create' ? 'create' : view === 'timer' ? 'timer' : 'services';
 
@@ -555,43 +560,28 @@ const MobileTestPage = () => {
     ];
 
     return (
-      <section className="mobile-section">
-        <div className="mobile-hero">
-          <div className="mobile-hero__head">
-            <p className="mobile-hero__date">{todaysLabel}</p>
-            <h1 className="mobile-hero__title">{heroGreeting}</h1>
-            <p className="mobile-hero__subtitle">
-              {heroSubtitle}
-              <span aria-hidden="true"> · </span>
-              <span>{timeLabel}</span>
-            </p>
+      <section className="mobile-section mobile-section--stacked">
+        <div className="mobile-intro">
+          <div className="mobile-intro__heading">
+            <p className="mobile-intro__eyebrow">{todaysLabel}</p>
+            <h1 className="mobile-intro__title">{heroGreeting}</h1>
+            <p className="mobile-intro__subtitle">{heroSubtitle}</p>
           </div>
-          <div className="mobile-hero__metrics">
-            <div className="mobile-metric">
-              <span className="mobile-metric__label">Services actifs</span>
-              <span className="mobile-metric__value">
-                {serviceMetrics.planned + serviceMetrics.inProgress}
-              </span>
-            </div>
-            <div className="mobile-metric">
-              <span className="mobile-metric__label">En cours</span>
-              <span className="mobile-metric__value">{serviceMetrics.inProgress}</span>
-            </div>
-            <div className="mobile-metric">
-              <span className="mobile-metric__label">Terminés</span>
-              <span className="mobile-metric__value">{serviceMetrics.completed}</span>
-            </div>
+          <div className="mobile-intro__actions">
+            <span className="mobile-intro__clock" aria-label={`Heure actuelle ${timeLabel}`}>
+              {timeLabel}
+            </span>
+            <button
+              type="button"
+              className="mobile-button mobile-button--primary mobile-intro__cta"
+              onClick={() => setView('create')}
+            >
+              Nouveau service
+            </button>
           </div>
-          <button
-            type="button"
-            className="mobile-button mobile-button--primary mobile-hero__cta"
-            onClick={() => setView('create')}
-          >
-            Planifier un service
-          </button>
         </div>
-        <div className="mobile-toolbar">
-          <div className="mobile-toolbar__group" role="tablist" aria-label="Filtrer les services">
+        <div className="mobile-filter-row">
+          <div className="mobile-filter-row__chips" role="tablist" aria-label="Filtrer les services">
             {filterOptions.map((option) => (
               <button
                 key={option.key}
@@ -606,11 +596,11 @@ const MobileTestPage = () => {
               </button>
             ))}
           </div>
-          <span className="mobile-toolbar__hint">
+          <span className="mobile-filter-row__count">
             {filterCounts[serviceFilter]} résultat{filterCounts[serviceFilter] > 1 ? 's' : ''}
           </span>
         </div>
-        <div className="mobile-service-list">
+        <div className="mobile-service-list mobile-service-list--simple">
           {filteredServiceEngagements.map((engagement) => {
             const client = clientsById.get(engagement.clientId);
             const service = servicesById.get(engagement.serviceId);
@@ -618,6 +608,9 @@ const MobileTestPage = () => {
             const clientLabel = client ? client.name : 'Client inconnu';
             const optionsCount = engagement.optionIds.length;
             const statusIntent = getStatusIntent(engagement.status);
+            const supportLabel = engagement.supportDetail
+              ? `${engagement.supportType} · ${engagement.supportDetail}`
+              : engagement.supportType;
             return (
               <button
                 key={engagement.id}
@@ -628,31 +621,20 @@ const MobileTestPage = () => {
                   setView('details');
                 }}
               >
-                <div className="mobile-service-card__header">
-                  <div>
-                    <p className="mobile-service-card__client">{clientLabel}</p>
-                    <h2 className="mobile-service-card__title">{label}</h2>
-                  </div>
+                <div className="mobile-service-card__line">
+                  <p className="mobile-service-card__client">{clientLabel}</p>
                   <span className={`mobile-status mobile-status--${statusIntent}`}>
                     {statusLabels[engagement.status]}
                   </span>
                 </div>
-                <div className="mobile-service-card__meta">
-                  <div className="mobile-meta">
-                    <span className="mobile-meta__label">Prévu le</span>
-                    <span className="mobile-meta__value">{formatListDate(engagement.scheduledAt)}</span>
-                  </div>
-                  <div className="mobile-meta">
-                    <span className="mobile-meta__label">Prestations</span>
-                    <span className="mobile-meta__value">{optionsCount}</span>
-                  </div>
+                <p className="mobile-service-card__title">{label}</p>
+                <div className="mobile-service-card__details">
+                  <span>{formatListDate(engagement.scheduledAt)}</span>
+                  <span>
+                    {optionsCount} prestation{optionsCount > 1 ? 's' : ''}
+                  </span>
                 </div>
-                <div className="mobile-service-card__tags">
-                  <span className="mobile-tag">{engagement.supportType}</span>
-                  {engagement.supportDetail ? (
-                    <span className="mobile-tag mobile-tag--muted">{engagement.supportDetail}</span>
-                  ) : null}
-                </div>
+                <p className="mobile-service-card__note">{supportLabel}</p>
               </button>
             );
           })}
@@ -1265,16 +1247,26 @@ const MobileTestPage = () => {
             <p className="mobile-app__subtitle">Interface terrain</p>
           </div>
         </div>
-        <div className="mobile-app__user-card">
-          <div>
-            <p className="mobile-app__user-name">
-              {userProfile.firstName} {userProfile.lastName}
-            </p>
-            <p className="mobile-app__user-meta">{activeCompany?.name ?? 'Wash&Go'}</p>
-          </div>
-          <button type="button" className="mobile-button mobile-button--ghost" onClick={logout}>
-            Déconnexion
+        <div className="mobile-app__header-actions">
+          <button
+            type="button"
+            className="mobile-button mobile-button--ghost mobile-theme-toggle"
+            onClick={toggleTheme}
+            aria-label={themeToggleLabel}
+          >
+            <span aria-hidden="true">{themeToggleGlyph}</span>
           </button>
+          <div className="mobile-app__user-card">
+            <div>
+              <p className="mobile-app__user-name">
+                {userProfile.firstName} {userProfile.lastName}
+              </p>
+              <p className="mobile-app__user-meta">{activeCompany?.name ?? 'Wash&Go'}</p>
+            </div>
+            <button type="button" className="mobile-button mobile-button--ghost" onClick={logout}>
+              Déconnexion
+            </button>
+          </div>
         </div>
       </header>
       <main className="mobile-app__main">
