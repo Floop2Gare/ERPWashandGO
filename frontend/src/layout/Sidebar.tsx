@@ -9,23 +9,10 @@ import {
 } from 'react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import {
-  IconNavClients,
-  IconNavDashboard,
-  IconNavDocuments,
-  IconNavLeads,
-  IconNavPlanning,
-  IconNavPurchases,
-  IconNavServices,
-  IconNavSettings,
-  IconNavStats,
-  IconNavUsers,
-} from '../components/icons';
 import { SIDEBAR_NAVIGATION_LINKS, SidebarNavigationLink } from './navigationLinks';
 import { useSidebarNavigationStore } from '../store/useSidebarNavigationOrder';
 import { useAppData } from '../store/useAppData';
 import { BRAND_BASELINE, BRAND_NAME } from '../lib/branding';
-import type { AppPageKey } from '../lib/rbac';
 
 interface SidebarProps {
   variant?: 'desktop' | 'mobile';
@@ -34,19 +21,6 @@ interface SidebarProps {
   onNavigate?: () => void;
   compact?: boolean;
 }
-
-const navigationIcons: Record<AppPageKey, (props: { className?: string }) => JSX.Element> = {
-  dashboard: IconNavDashboard,
-  clients: IconNavClients,
-  leads: IconNavLeads,
-  service: IconNavServices,
-  achats: IconNavPurchases,
-  documents: IconNavDocuments,
-  planning: IconNavPlanning,
-  stats: IconNavStats,
-  parametres: IconNavSettings,
-  'parametres.utilisateurs': IconNavUsers,
-};
 
 const moveItem = (items: SidebarNavigationLink[], from: number, to: number) => {
   const next = [...items];
@@ -325,21 +299,12 @@ export const Sidebar = ({
                       }
                       onClick={handleNavigate}
                     >
-                      {({ isActive }) => {
-                        const IconComponent = navigationIcons[link.page];
-                        return (
-                          <>
-                            {IconComponent && (
-                              <span className="sidebar-link__icon" aria-hidden="true">
-                                <IconComponent className={clsx('h-5 w-5', isActive ? 'text-primary' : undefined)} />
-                              </span>
-                            )}
-                            <span className="sidebar-link__label flex-1 truncate text-[13px] font-semibold tracking-wide">
-                              {link.label}
-                            </span>
-                          </>
-                        );
-                      }}
+                      <span className="sidebar-link__initial" aria-hidden="true">
+                        {link.label.trim().charAt(0).toUpperCase() || '•'}
+                      </span>
+                      <span className="sidebar-link__label flex-1 truncate text-[13px] font-semibold tracking-wide">
+                        {link.label}
+                      </span>
                     </NavLink>
                     {isCollapsed && (
                       <span className="sidebar-link__tooltip" role="tooltip">
