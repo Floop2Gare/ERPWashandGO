@@ -219,6 +219,8 @@ const buildPreviewEngagement = (draft: EngagementDraft, kind: EngagementKind): E
   quoteNumber: null,
   quoteStatus: kind === 'devis' ? 'brouillon' : null,
   optionOverrides: sanitizeDraftOverrides(draft.optionIds, draft.optionOverrides),
+  mobileDurationMinutes: null,
+  mobileCompletionComment: null,
 });
 
 const documentLabels: Record<EngagementKind, string> = {
