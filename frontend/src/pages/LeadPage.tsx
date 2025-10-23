@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 
@@ -148,6 +148,7 @@ const LeadPage = () => {
   const [noteDraft, setNoteDraft] = useState('');
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
 
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   const createSectionRef = useRef<HTMLDivElement | null>(null);
   const editSectionRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -292,6 +293,12 @@ const LeadPage = () => {
     setNoteDraft('');
   };
 
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
   const mapFormToPayload = () => {
     const tags = leadForm.tags
       .split(',')
@@ -340,6 +347,7 @@ const LeadPage = () => {
     setFeedback('Lead créé.');
     setSelectedLeadIds((ids) => [created.id, ...ids]);
     closePanels();
+    scrollToList();
   };
 
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1062,8 +1070,9 @@ const LeadPage = () => {
           )}
         </div>
 
-        {view === 'table' ? (
-          <div className="mt-6 space-y-4">
+        <div ref={listSectionRef}>
+          {view === 'table' ? (
+            <div className="mt-6 space-y-4">
             <div className="hidden md:block">
               <Table
                 columns={tableColumns}
@@ -1202,6 +1211,7 @@ const LeadPage = () => {
         ) : (
           kanban
         )}
+        </div>
       </Card>
 
       {activePanel === 'create' && (

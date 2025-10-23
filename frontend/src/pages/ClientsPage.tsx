@@ -1,6 +1,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -201,6 +202,7 @@ const ClientsPage = () => {
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [importConfig, setImportConfig] = useState<ImportConfig | null>(null);
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   const creationSectionRef = useRef<HTMLDivElement | null>(null);
   const detailSectionRef = useRef<HTMLDivElement | null>(null);
   const detailFocusRef = useRef<HTMLDivElement | null>(null);
@@ -224,6 +226,12 @@ const ClientsPage = () => {
     clearUndo();
     setFeedback(message);
   };
+
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const sortedClients = useMemo(
     () =>
@@ -540,7 +548,9 @@ const ClientsPage = () => {
       setCreationOpen(false);
       setClientForm(emptyClientForm);
       setCreationContactForm(emptyContactForm);
-      setSelectedClientId(created.id);
+      setSelectedClientId(null);
+      setSelectedClientIds([]);
+      scrollToList();
     } finally {
       setIsSubmitting(false);
     }
@@ -1167,7 +1177,8 @@ const ClientsPage = () => {
         </div>
       )}
 
-      <Card padding="sm" className="space-y-4">
+      <div ref={listSectionRef}>
+        <Card padding="sm" className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1 text-xs text-slate-600">
@@ -1307,7 +1318,8 @@ const ClientsPage = () => {
           }}
           rowClassName={clientRowClassName}
         />
-      </Card>
+        </Card>
+      </div>
 
       {creationOpen && (
         <div ref={creationSectionRef}>
