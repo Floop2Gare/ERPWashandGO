@@ -1592,126 +1592,141 @@ const SettingsPage = () => {
                       className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
-                      <thead>
-                        <tr className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                          <th className="py-2 pr-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleCatalogServiceSort('name')}
-                              className="flex items-center gap-1 text-slate-600"
-                            >
-                              Nom
-                              {catalogServiceSort.key === 'name' && (
-                                <span>{catalogServiceSort.direction === 'asc' ? '▲' : '▼'}</span>
-                              )}
-                            </button>
-                          </th>
-                          <th className="py-2 pr-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleCatalogServiceSort('category')}
-                              className="flex items-center gap-1 text-slate-600"
-                            >
-                              Catégorie
-                              {catalogServiceSort.key === 'category' && (
-                                <span>{catalogServiceSort.direction === 'asc' ? '▲' : '▼'}</span>
-                              )}
-                            </button>
-                          </th>
-                          <th className="py-2 pr-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleCatalogServiceSort('active')}
-                              className="flex items-center gap-1 text-slate-600"
-                            >
-                              Statut
-                              {catalogServiceSort.key === 'active' && (
-                                <span>{catalogServiceSort.direction === 'asc' ? '▲' : '▼'}</span>
-                              )}
-                            </button>
-                          </th>
-                          <th className="py-2 pr-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleCatalogServiceSort('count')}
-                              className="flex items-center gap-1 text-slate-600"
-                            >
-                              Prestations
-                              {catalogServiceSort.key === 'count' && (
-                                <span>{catalogServiceSort.direction === 'asc' ? '▲' : '▼'}</span>
-                              )}
-                            </button>
-                          </th>
-                          <th className="py-2 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedCatalogServices.map((service) => (
-                          <tr
-                            key={service.id}
-                            onClick={() => setSelectedCatalogServiceId(service.id)}
-                            className={clsx(
-                              'border-b border-slate-100 transition-colors hover:bg-primary/5',
-                              selectedCatalogService?.id === service.id && 'bg-primary/5'
-                            )}
-                          >
-                            <td className="py-2 pr-3">
-                              <div className="flex flex-col gap-1">
-                                <span className="font-medium text-slate-900">{service.name}</span>
-                                {service.description && (
-                                  <span className="text-[11px] text-slate-500">{service.description}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-2 pr-3 text-slate-500">{service.category}</td>
-                            <td className="py-2 pr-3">
-                              <span className={service.active ? 'text-emerald-600 font-medium' : 'text-slate-400'}>
-                                {service.active ? 'Actif' : 'Inactif'}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-3 text-slate-500">{service.options.length}</td>
-                            <td className="py-2 text-right">
-                              <div className="flex items-center justify-end gap-1 text-slate-500">
-                                <RowActionButton
-                                  label="Modifier"
-                                  onClick={() => {
-                                    openCatalogServiceDetail(service);
-                                  }}
-                                >
-                                  <IconEdit />
-                                </RowActionButton>
-                                <RowActionButton
-                                  label="Dupliquer"
-                                  onClick={() => {
-                                    handleCatalogServiceDuplicate(service);
-                                  }}
-                                >
-                                  <IconDuplicate />
-                                </RowActionButton>
-                                <RowActionButton
-                                  label="Supprimer"
-                                  tone="danger"
-                                  onClick={() => {
-                                    handleCatalogServiceDelete(service.id);
-                                  }}
-                                >
-                                  <IconTrash />
-                                </RowActionButton>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {!sortedCatalogServices.length && (
+                  <div className="data-table__outer">
+                    <div className="data-table__scroll">
+                      <table className="data-table">
+                        <thead>
                           <tr>
-                            <td colSpan={5} className="py-6 text-center text-[11px] text-slate-400">
-                              Aucun service enregistré pour le moment.
-                            </td>
+                            <th className="data-table__header-cell">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('name')}
+                                className="data-table__sort"
+                              >
+                                Nom
+                                {catalogServiceSort.key === 'name' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('category')}
+                                className="data-table__sort"
+                              >
+                                Catégorie
+                                {catalogServiceSort.key === 'category' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('active')}
+                                className="data-table__sort"
+                              >
+                                Statut
+                                {catalogServiceSort.key === 'active' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell data-table__header-cell--numeric">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('count')}
+                                className="data-table__sort"
+                              >
+                                Prestations
+                                {catalogServiceSort.key === 'count' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell data-table__header-cell--actions">Actions</th>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {sortedCatalogServices.map((service) => (
+                            <tr
+                              key={service.id}
+                              onClick={() => setSelectedCatalogServiceId(service.id)}
+                              className={clsx(
+                                'data-table__row',
+                                'data-table__row--selectable',
+                                selectedCatalogService?.id === service.id && 'data-table__row--active'
+                              )}
+                            >
+                              <td className="data-table__cell data-table__cell--primary">
+                                <div>
+                                  <span>{service.name}</span>
+                                  {service.description && (
+                                    <span className="data-table__meta">{service.description}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="data-table__cell">{service.category}</td>
+                              <td className="data-table__cell data-table__cell--status">
+                                <span
+                                  className={clsx('status-pill', !service.active && 'status-pill--inactive')}
+                                >
+                                  {service.active ? 'Actif' : 'Inactif'}
+                                </span>
+                              </td>
+                              <td className="data-table__cell data-table__cell--numeric">
+                                {service.options.length}
+                              </td>
+                              <td className="data-table__cell data-table__cell--actions">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <RowActionButton
+                                    label="Modifier"
+                                    onClick={() => {
+                                      openCatalogServiceDetail(service);
+                                    }}
+                                  >
+                                    <IconEdit />
+                                  </RowActionButton>
+                                  <RowActionButton
+                                    label="Dupliquer"
+                                    onClick={() => {
+                                      handleCatalogServiceDuplicate(service);
+                                    }}
+                                  >
+                                    <IconDuplicate />
+                                  </RowActionButton>
+                                  <RowActionButton
+                                    label="Supprimer"
+                                    tone="danger"
+                                    onClick={() => {
+                                      handleCatalogServiceDelete(service.id);
+                                    }}
+                                  >
+                                    <IconTrash />
+                                  </RowActionButton>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {!sortedCatalogServices.length && (
+                            <tr>
+                              <td colSpan={5} className="data-table__empty">
+                                Aucun service enregistré pour le moment.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </Card>
                 <Card padding="lg" className="space-y-4">
@@ -1743,135 +1758,148 @@ const SettingsPage = () => {
                           className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                         />
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
-                          <thead>
-                            <tr className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                              <th className="py-2 pr-3">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCatalogItemSort('label')}
-                                  className="flex items-center gap-1 text-slate-600"
-                                >
-                                  Libellé
-                                  {catalogItemSort.key === 'label' && (
-                                    <span>{catalogItemSort.direction === 'asc' ? '▲' : '▼'}</span>
-                                  )}
-                                </button>
-                              </th>
-                              <th className="py-2 pr-3">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCatalogItemSort('duration')}
-                                  className="flex items-center gap-1 text-slate-600"
-                                >
-                                  Durée
-                                  {catalogItemSort.key === 'duration' && (
-                                    <span>{catalogItemSort.direction === 'asc' ? '▲' : '▼'}</span>
-                                  )}
-                                </button>
-                              </th>
-                              <th className="py-2 pr-3">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCatalogItemSort('price')}
-                                  className="flex items-center gap-1 text-slate-600"
-                                >
-                                  Prix HT
-                                  {catalogItemSort.key === 'price' && (
-                                    <span>{catalogItemSort.direction === 'asc' ? '▲' : '▼'}</span>
-                                  )}
-                                </button>
-                              </th>
-                              {vatGloballyEnabled && (
-                                <th className="py-2 pr-3">
+                      <div className="data-table__outer">
+                        <div className="data-table__scroll">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th className="data-table__header-cell">
                                   <button
                                     type="button"
-                                    onClick={() => toggleCatalogItemSort('tva')}
-                                    className="flex items-center gap-1 text-slate-600"
+                                    onClick={() => toggleCatalogItemSort('label')}
+                                    className="data-table__sort"
                                   >
-                                    TVA %
-                                    {catalogItemSort.key === 'tva' && (
-                                      <span>{catalogItemSort.direction === 'asc' ? '▲' : '▼'}</span>
+                                    Libellé
+                                    {catalogItemSort.key === 'label' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
                                     )}
                                   </button>
                                 </th>
-                              )}
-                              <th className="py-2 pr-3">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCatalogItemSort('active')}
-                                  className="flex items-center gap-1 text-slate-600"
-                                >
-                                  Actif
-                                  {catalogItemSort.key === 'active' && (
-                                    <span>{catalogItemSort.direction === 'asc' ? '▲' : '▼'}</span>
-                                  )}
-                                </button>
-                              </th>
-                              <th className="py-2 text-right">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sortedCatalogItems.map((option) => (
-                              <tr key={option.id} className="border-b border-slate-100">
-                                <td className="py-2 pr-3">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-medium text-slate-900">{option.label}</span>
-                                    {option.description && (
-                                      <span className="text-[11px] text-slate-500">{option.description}</span>
+                                <th className="data-table__header-cell data-table__header-cell--numeric">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('duration')}
+                                    className="data-table__sort"
+                                  >
+                                    Durée
+                                    {catalogItemSort.key === 'duration' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
                                     )}
-                                  </div>
-                                </td>
-                                <td className="py-2 pr-3 text-slate-500">
-                                  {option.defaultDurationMin ? `${option.defaultDurationMin} min` : '—'}
-                                </td>
-                                <td className="py-2 pr-3 text-slate-500">{formatCurrency(option.unitPriceHT)}</td>
+                                  </button>
+                                </th>
+                                <th className="data-table__header-cell data-table__header-cell--numeric">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('price')}
+                                    className="data-table__sort"
+                                  >
+                                    Prix HT
+                                    {catalogItemSort.key === 'price' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
+                                    )}
+                                  </button>
+                                </th>
                                 {vatGloballyEnabled && (
-                                  <td className="py-2 pr-3 text-slate-500">
-                                    {option.tvaPct !== undefined && option.tvaPct !== null ? `${option.tvaPct} %` : '—'}
-                                  </td>
+                                  <th className="data-table__header-cell data-table__header-cell--numeric">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleCatalogItemSort('tva')}
+                                      className="data-table__sort"
+                                    >
+                                      TVA %
+                                      {catalogItemSort.key === 'tva' && (
+                                        <span className="data-table__sort-indicator">
+                                          {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                        </span>
+                                      )}
+                                    </button>
+                                  </th>
                                 )}
-                                <td className="py-2 pr-3">
-                                  <span className={option.active ? 'text-emerald-600 font-medium' : 'text-slate-400'}>
-                                    {option.active ? 'Actif' : 'Inactif'}
-                                  </span>
-                                </td>
-                                <td className="py-2 text-right">
-                                  <div className="flex items-center justify-end gap-1 text-slate-500">
-                                    <RowActionButton
-                                      label="Modifier"
-                                      onClick={() => {
-                                        openCatalogItemDetail(selectedCatalogService.id, option);
-                                      }}
-                                    >
-                                      <IconEdit />
-                                    </RowActionButton>
-                                    <RowActionButton
-                                      label="Supprimer"
-                                      tone="danger"
-                                      onClick={() => {
-                                        handleCatalogItemDelete(selectedCatalogService.id, option.id);
-                                      }}
-                                    >
-                                      <IconTrash />
-                                    </RowActionButton>
-                                  </div>
-                                </td>
+                                <th className="data-table__header-cell">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('active')}
+                                    className="data-table__sort"
+                                  >
+                                    Actif
+                                    {catalogItemSort.key === 'active' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
+                                    )}
+                                  </button>
+                                </th>
+                                <th className="data-table__header-cell data-table__header-cell--actions">Actions</th>
                               </tr>
-                            ))}
-                            {!sortedCatalogItems.length && (
-                              <tr>
-                                <td
-                                  colSpan={vatGloballyEnabled ? 6 : 5}
-                                  className="py-6 text-center text-[11px] text-slate-400"
-                                >
-                                  Aucune prestation enregistrée pour ce service.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {sortedCatalogItems.map((option) => (
+                                <tr key={option.id} className="data-table__row">
+                                  <td className="data-table__cell data-table__cell--primary">
+                                    <div>
+                                      <span>{option.label}</span>
+                                      {option.description && (
+                                        <span className="data-table__meta">{option.description}</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="data-table__cell data-table__cell--numeric">
+                                    {option.defaultDurationMin ? `${option.defaultDurationMin} min` : '—'}
+                                  </td>
+                                  <td className="data-table__cell data-table__cell--numeric">
+                                    {formatCurrency(option.unitPriceHT)}
+                                  </td>
+                                  {vatGloballyEnabled && (
+                                    <td className="data-table__cell data-table__cell--numeric">
+                                      {option.tvaPct !== undefined && option.tvaPct !== null ? `${option.tvaPct} %` : '—'}
+                                    </td>
+                                  )}
+                                  <td className="data-table__cell data-table__cell--status">
+                                    <span
+                                      className={clsx('status-pill', !option.active && 'status-pill--inactive')}
+                                    >
+                                      {option.active ? 'Actif' : 'Inactif'}
+                                    </span>
+                                  </td>
+                                  <td className="data-table__cell data-table__cell--actions">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <RowActionButton
+                                        label="Modifier"
+                                        onClick={() => {
+                                          openCatalogItemDetail(selectedCatalogService.id, option);
+                                        }}
+                                      >
+                                        <IconEdit />
+                                      </RowActionButton>
+                                      <RowActionButton
+                                        label="Supprimer"
+                                        tone="danger"
+                                        onClick={() => {
+                                          handleCatalogItemDelete(selectedCatalogService.id, option.id);
+                                        }}
+                                      >
+                                        <IconTrash />
+                                      </RowActionButton>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {!sortedCatalogItems.length && (
+                                <tr>
+                                  <td colSpan={vatGloballyEnabled ? 6 : 5} className="data-table__empty">
+                                    Aucune prestation enregistrée pour ce service.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </>
                   ) : (
