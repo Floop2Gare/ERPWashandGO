@@ -9,6 +9,7 @@ import {
   type ClientContact,
   type CommercialDocumentStatus,
   type Engagement,
+  type EngagementStatus,
   type Service,
   type ServiceOption,
   type SupportType,
@@ -28,6 +29,26 @@ type TimerState = {
 };
 
 const supportTypes: SupportType[] = ['Voiture', 'Canapé', 'Textile'];
+
+type ServiceFilter = 'all' | 'upcoming' | 'done';
+
+const statusLabels: Record<EngagementStatus, string> = {
+  brouillon: 'Brouillon',
+  envoyé: 'Envoyé',
+  planifié: 'Planifié',
+  réalisé: 'Réalisé',
+  annulé: 'Annulé',
+};
+
+const statusIntents: Record<EngagementStatus, 'neutral' | 'info' | 'success' | 'warning'> = {
+  brouillon: 'neutral',
+  envoyé: 'info',
+  planifié: 'info',
+  réalisé: 'success',
+  annulé: 'warning',
+};
+
+const getStatusIntent = (status: EngagementStatus) => statusIntents[status] ?? 'neutral';
 
 const toClock = (elapsedMs: number) => {
   const safe = Math.max(0, Math.floor(elapsedMs / 1000));
@@ -198,6 +219,7 @@ const MobileTestPage = () => {
 
   const [view, setView] = useState<MobileView>('services');
   const [selectedEngagementId, setSelectedEngagementId] = useState<string | null>(null);
+  const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('all');
   const [createClientId, setCreateClientId] = useState('');
   const [createServiceId, setCreateServiceId] = useState('');
   const [createOptionIds, setCreateOptionIds] = useState<string[]>([]);
@@ -234,6 +256,37 @@ const MobileTestPage = () => {
         .filter((engagement) => engagement.kind === 'service')
         .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [engagements]
+  );
+
+  const filteredServiceEngagements = useMemo(() => {
+    if (serviceFilter === 'upcoming') {
+      return serviceEngagements.filter((engagement) => engagement.status === 'planifié' || engagement.status === 'envoyé');
+    }
+    if (serviceFilter === 'done') {
+      return serviceEngagements.filter((engagement) => engagement.status === 'réalisé');
+    }
+    return serviceEngagements;
+  }, [serviceEngagements, serviceFilter]);
+
+  const serviceMetrics = useMemo(() => {
+    const planned = serviceEngagements.filter((engagement) => engagement.status === 'planifié').length;
+    const inProgress = serviceEngagements.filter((engagement) => engagement.status === 'envoyé').length;
+    const completed = serviceEngagements.filter((engagement) => engagement.status === 'réalisé').length;
+    return {
+      total: serviceEngagements.length,
+      planned,
+      inProgress,
+      completed,
+    };
+  }, [serviceEngagements]);
+
+  const filterCounts = useMemo(
+    () => ({
+      all: serviceMetrics.total,
+      upcoming: serviceMetrics.planned + serviceMetrics.inProgress,
+      done: serviceMetrics.completed,
+    }),
+    [serviceMetrics]
   );
 
   const selectedEngagement = selectedEngagementId
@@ -419,6 +472,16 @@ const MobileTestPage = () => {
     ? companies.find((company) => company.id === activeCompanyId) ?? companies[0] ?? null
     : companies[0] ?? null;
 
+  const now = new Date();
+  const todaysLabelRaw = formatDateFn(now, 'EEEE d MMMM', { locale: fr });
+  const todaysLabel = todaysLabelRaw.charAt(0).toUpperCase() + todaysLabelRaw.slice(1);
+  const timeLabel = formatDateFn(now, 'HH:mm');
+  const heroGreeting = userProfile.firstName ? `Bonjour ${userProfile.firstName}` : 'Bonjour';
+  const heroSubtitle = activeCompany ? `Équipe ${activeCompany.name}` : 'Wash&Go terrain';
+  const canAccessTimer = Boolean(timerState);
+  const navActiveKey: 'services' | 'create' | 'timer' =
+    view === 'create' ? 'create' : view === 'timer' ? 'timer' : 'services';
+
   const handleCreateService = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreateError(null);
@@ -484,58 +547,125 @@ const MobileTestPage = () => {
     setSelectedEngagementId(null);
   };
 
-  const renderServices = () => (
-    <section className="mobile-section">
-      <div className="mobile-section__header">
-        <div>
-          <h1>Services</h1>
-          <p className="mobile-section__subtitle">Suivi des interventions terrain</p>
-        </div>
-        <button
-          type="button"
-          className="mobile-button mobile-button--primary"
-          onClick={() => setView('create')}
-        >
-          Nouveau service
-        </button>
-      </div>
-      <div className="mobile-service-list">
-        {serviceEngagements.map((engagement) => {
-          const client = clientsById.get(engagement.clientId);
-          const service = servicesById.get(engagement.serviceId);
-          const label = service ? service.name : 'Service inconnu';
-          const clientLabel = client ? client.name : 'Client inconnu';
-          return (
-            <button
-              key={engagement.id}
-              type="button"
-              className="mobile-service-card"
-              onClick={() => {
-                setSelectedEngagementId(engagement.id);
-                setView('details');
-              }}
-            >
-              <div className="mobile-service-card__titles">
-                <h2>{label}</h2>
-                <p className="mobile-service-card__client">{clientLabel}</p>
-              </div>
-              <div className="mobile-service-card__meta">
-                <span className={`status-pill status-pill--${engagement.status}`}>
-                  {engagement.status}
-                </span>
-                <span className="mobile-service-card__date">{formatListDate(engagement.scheduledAt)}</span>
-              </div>
-            </button>
-          );
-        })}
-        {!serviceEngagements.length ? (
-          <div className="mobile-card mobile-card--empty">
-            <p>Aucun service enregistré pour le moment.</p>
+  const renderServices = () => {
+    const filterOptions: { key: ServiceFilter; label: string }[] = [
+      { key: 'all', label: 'Tous' },
+      { key: 'upcoming', label: 'À venir' },
+      { key: 'done', label: 'Terminés' },
+    ];
+
+    return (
+      <section className="mobile-section">
+        <div className="mobile-hero">
+          <div className="mobile-hero__head">
+            <p className="mobile-hero__date">{todaysLabel}</p>
+            <h1 className="mobile-hero__title">{heroGreeting}</h1>
+            <p className="mobile-hero__subtitle">
+              {heroSubtitle}
+              <span aria-hidden="true"> · </span>
+              <span>{timeLabel}</span>
+            </p>
           </div>
-        ) : null}
-      </div>
-    </section>
-  );
+          <div className="mobile-hero__metrics">
+            <div className="mobile-metric">
+              <span className="mobile-metric__label">Services actifs</span>
+              <span className="mobile-metric__value">
+                {serviceMetrics.planned + serviceMetrics.inProgress}
+              </span>
+            </div>
+            <div className="mobile-metric">
+              <span className="mobile-metric__label">En cours</span>
+              <span className="mobile-metric__value">{serviceMetrics.inProgress}</span>
+            </div>
+            <div className="mobile-metric">
+              <span className="mobile-metric__label">Terminés</span>
+              <span className="mobile-metric__value">{serviceMetrics.completed}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="mobile-button mobile-button--primary mobile-hero__cta"
+            onClick={() => setView('create')}
+          >
+            Planifier un service
+          </button>
+        </div>
+        <div className="mobile-toolbar">
+          <div className="mobile-toolbar__group" role="tablist" aria-label="Filtrer les services">
+            {filterOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                role="tab"
+                className={`mobile-filter-button${serviceFilter === option.key ? ' mobile-filter-button--active' : ''}`}
+                aria-selected={serviceFilter === option.key}
+                onClick={() => setServiceFilter(option.key)}
+              >
+                <span>{option.label}</span>
+                <span className="mobile-filter-button__count">{filterCounts[option.key]}</span>
+              </button>
+            ))}
+          </div>
+          <span className="mobile-toolbar__hint">
+            {filterCounts[serviceFilter]} résultat{filterCounts[serviceFilter] > 1 ? 's' : ''}
+          </span>
+        </div>
+        <div className="mobile-service-list">
+          {filteredServiceEngagements.map((engagement) => {
+            const client = clientsById.get(engagement.clientId);
+            const service = servicesById.get(engagement.serviceId);
+            const label = service ? service.name : 'Service inconnu';
+            const clientLabel = client ? client.name : 'Client inconnu';
+            const optionsCount = engagement.optionIds.length;
+            const statusIntent = getStatusIntent(engagement.status);
+            return (
+              <button
+                key={engagement.id}
+                type="button"
+                className={`mobile-service-card mobile-service-card--${statusIntent}`}
+                onClick={() => {
+                  setSelectedEngagementId(engagement.id);
+                  setView('details');
+                }}
+              >
+                <div className="mobile-service-card__header">
+                  <div>
+                    <p className="mobile-service-card__client">{clientLabel}</p>
+                    <h2 className="mobile-service-card__title">{label}</h2>
+                  </div>
+                  <span className={`mobile-status mobile-status--${statusIntent}`}>
+                    {statusLabels[engagement.status]}
+                  </span>
+                </div>
+                <div className="mobile-service-card__meta">
+                  <div className="mobile-meta">
+                    <span className="mobile-meta__label">Prévu le</span>
+                    <span className="mobile-meta__value">{formatListDate(engagement.scheduledAt)}</span>
+                  </div>
+                  <div className="mobile-meta">
+                    <span className="mobile-meta__label">Prestations</span>
+                    <span className="mobile-meta__value">{optionsCount}</span>
+                  </div>
+                </div>
+                <div className="mobile-service-card__tags">
+                  <span className="mobile-tag">{engagement.supportType}</span>
+                  {engagement.supportDetail ? (
+                    <span className="mobile-tag mobile-tag--muted">{engagement.supportDetail}</span>
+                  ) : null}
+                </div>
+              </button>
+            );
+          })}
+          {!filteredServiceEngagements.length ? (
+            <div className="mobile-card mobile-card--empty">
+              <h2>Aucun service</h2>
+              <p>Adaptez les filtres ou créez votre première intervention.</p>
+            </div>
+          ) : null}
+        </div>
+      </section>
+    );
+  };
 
   const renderCreate = () => {
     const client = clientsById.get(createClientId);
@@ -544,96 +674,129 @@ const MobileTestPage = () => {
 
     return (
       <section className="mobile-section">
-        <div className="mobile-section__header">
+        <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('services')}>
             Retour
           </button>
-          <h1>Créer un service</h1>
+          <h1>Nouveau service</h1>
         </div>
+        <p className="mobile-section__subtitle mobile-section__subtitle--soft">
+          Planifiez une intervention terrain en sélectionnant le client, le service catalogue et les prestations
+          associées.
+        </p>
         <form className="mobile-card mobile-card--form" onSubmit={handleCreateService}>
-          <label className="mobile-field">
-            <span>Client</span>
-            <select value={createClientId} onChange={(event) => setCreateClientId(event.target.value)}>
-              {clients.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mobile-field">
-            <span>Service catalogue</span>
-            <select
-              value={createServiceId}
-              onChange={(event) => {
-                const nextId = event.target.value;
-                setCreateServiceId(nextId);
-                setCreateOptionIds(getDefaultOptionIds(servicesById.get(nextId)));
-              }}
-            >
-              {services.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <fieldset className="mobile-fieldset">
-            <legend>Prestations incluses</legend>
-            <div className="mobile-checkbox-list">
+          <div className="mobile-card__header">
+            <div className="mobile-card__title-block">
+              <p className="mobile-card__eyebrow">Informations</p>
+              <h2 className="mobile-card__title">Détails de la mission</h2>
+              <p className="mobile-card__subtitle">Choisissez le client et le service à planifier.</p>
+            </div>
+          </div>
+          <div className="mobile-form-grid">
+            <label className="mobile-field">
+              <span>Client</span>
+              <select value={createClientId} onChange={(event) => setCreateClientId(event.target.value)}>
+                {clients.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mobile-field">
+              <span>Service catalogue</span>
+              <select
+                value={createServiceId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setCreateServiceId(nextId);
+                  setCreateOptionIds(getDefaultOptionIds(servicesById.get(nextId)));
+                }}
+              >
+                {services.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="mobile-card__section">
+            <div className="mobile-section__header mobile-section__header--compact">
+              <h3>Prestations incluses</h3>
+              <span className="mobile-section__subtitle">
+                {options.length ? `${options.length} disponible${options.length > 1 ? 's' : ''}` : 'Aucune prestation active'}
+              </span>
+            </div>
+            <div className="mobile-checkbox-grid">
               {options.map((option) => (
-                <label key={option.id} className="mobile-checkbox">
+                <label
+                  key={option.id}
+                  className={`mobile-checkbox-tile${!option.active ? ' mobile-checkbox-tile--disabled' : ''}`}
+                >
                   <input
                     type="checkbox"
                     checked={createOptionIds.includes(option.id)}
                     onChange={() => handleToggleOption(option.id)}
                     disabled={!option.active}
                   />
-                  <span>
-                    <strong>{option.label}</strong>
-                    <small>
-                      {formatDuration(option.defaultDurationMin)} – {formatCurrency(option.unitPriceHT)} HT
-                    </small>
-                  </span>
+                  <div>
+                    <span className="mobile-checkbox-tile__label">{option.label}</span>
+                    <span className="mobile-checkbox-tile__meta">
+                      {formatDuration(option.defaultDurationMin)} · {formatCurrency(option.unitPriceHT)} HT
+                    </span>
+                  </div>
                 </label>
               ))}
-              {!options.length ? <p>Aucune prestation disponible pour ce service.</p> : null}
+              {!options.length ? (
+                <p className="mobile-prestation__empty">Aucune prestation disponible pour ce service.</p>
+              ) : null}
             </div>
-          </fieldset>
-          <label className="mobile-field">
-            <span>Type de support</span>
-            <select
-              value={createSupportType}
-              onChange={(event) => setCreateSupportType(event.target.value as SupportType)}
-            >
-              {supportTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mobile-field">
-            <span>Détail du support</span>
-            <input
-              type="text"
-              value={createSupportDetail}
-              placeholder="Ex. SUV hybride"
-              onChange={(event) => setCreateSupportDetail(event.target.value)}
-            />
-          </label>
+          </div>
+          <div className="mobile-form-grid mobile-form-grid--two">
+            <label className="mobile-field">
+              <span>Type de support</span>
+              <select
+                value={createSupportType}
+                onChange={(event) => setCreateSupportType(event.target.value as SupportType)}
+              >
+                {supportTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mobile-field">
+              <span>Détail du support</span>
+              <input
+                type="text"
+                value={createSupportDetail}
+                placeholder="Ex. SUV hybride"
+                onChange={(event) => setCreateSupportDetail(event.target.value)}
+              />
+            </label>
+          </div>
           {createError ? <p className="mobile-feedback mobile-feedback--error">{createError}</p> : null}
-          <button type="submit" className="mobile-button mobile-button--primary" disabled={isCreatingService}>
-            {isCreatingService ? 'Enregistrement…' : 'Créer le service'}
-          </button>
+          <div className="mobile-card__footer">
+            <button type="submit" className="mobile-button mobile-button--primary" disabled={isCreatingService}>
+              {isCreatingService ? 'Enregistrement…' : 'Créer le service'}
+            </button>
+          </div>
         </form>
         {client ? (
-          <aside className="mobile-card mobile-card--hint">
-            <h2>Contacts</h2>
-            <ul>
+          <aside className="mobile-card mobile-card--info">
+            <div className="mobile-card__title-block">
+              <p className="mobile-card__eyebrow">Contacts</p>
+              <h2 className="mobile-card__title">Personnes à prévenir</h2>
+            </div>
+            <ul className="mobile-info-list">
               {client.contacts.map((contact) => (
                 <li key={contact.id}>
-                  {contact.firstName} {contact.lastName} – {contact.email || 'Email manquant'}
+                  <span className="mobile-info-list__name">
+                    {contact.firstName} {contact.lastName}
+                  </span>
+                  <span className="mobile-info-list__meta">{contact.email || 'Email manquant'}</span>
                 </li>
               ))}
             </ul>
@@ -646,6 +809,8 @@ const MobileTestPage = () => {
   const renderDetails = (engagement: Engagement) => {
     const client = clientsById.get(engagement.clientId);
     const service = servicesById.get(engagement.serviceId);
+    const serviceLabel = service ? service.name : 'Service inconnu';
+    const clientLabel = client ? client.name : 'Client introuvable';
     const options = service ? service.options.filter((option) => engagement.optionIds.includes(option.id)) : [];
     const totals = computeEngagementTotals(engagement);
     const vatPercent = safeVatRate(vatRate);
@@ -663,54 +828,77 @@ const MobileTestPage = () => {
         ? 'Voir le minuteur'
         : 'Reprendre le minuteur'
       : 'Démarrer le service';
+    const statusIntent = getStatusIntent(engagement.status);
 
     return (
       <section className="mobile-section">
-        <div className="mobile-section__header">
+        <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={handleNavigateBack}>
             Retour
           </button>
           <h1>Détails du service</h1>
         </div>
         <div className="mobile-card mobile-card--details">
-          <h2>{service ? service.name : 'Service inconnu'}</h2>
-          <p className="mobile-detail-line">
-            <strong>Client :</strong> {client ? client.name : 'Client introuvable'}
-          </p>
-          <p className="mobile-detail-line">
-            <strong>Statut :</strong>{' '}
-            <span className={`status-pill status-pill--${engagement.status}`}>{engagement.status}</span>
-          </p>
-          <p className="mobile-detail-line">
-            <strong>Date planifiée :</strong> {formatDateTime(engagement.scheduledAt)}
-          </p>
-          <p className="mobile-detail-line">
-            <strong>Support :</strong> {engagement.supportType} – {engagement.supportDetail || 'Non renseigné'}
-          </p>
-          {engagement.mobileDurationMinutes ? (
-            <p className="mobile-detail-line">
-              <strong>Durée enregistrée :</strong> {formatDuration(engagement.mobileDurationMinutes)}
-            </p>
-          ) : null}
+          <div className="mobile-card__header">
+            <div className="mobile-card__title-block">
+              <p className="mobile-card__eyebrow">Service</p>
+              <h2 className="mobile-card__title">{serviceLabel}</h2>
+              <p className="mobile-card__subtitle">{clientLabel}</p>
+            </div>
+            <span className={`mobile-status mobile-status--${statusIntent}`}>
+              {statusLabels[engagement.status]}
+            </span>
+          </div>
+          <div className="mobile-detail-grid">
+            <div className="mobile-detail">
+              <span className="mobile-detail__label">Client</span>
+              <span className="mobile-detail__value">{clientLabel}</span>
+            </div>
+            <div className="mobile-detail">
+              <span className="mobile-detail__label">Date planifiée</span>
+              <span className="mobile-detail__value">{formatDateTime(engagement.scheduledAt)}</span>
+            </div>
+            <div className="mobile-detail">
+              <span className="mobile-detail__label">Support</span>
+              <span className="mobile-detail__value">
+                {engagement.supportType}
+                {engagement.supportDetail ? ` · ${engagement.supportDetail}` : ''}
+              </span>
+            </div>
+            {engagement.mobileDurationMinutes ? (
+              <div className="mobile-detail">
+                <span className="mobile-detail__label">Durée enregistrée</span>
+                <span className="mobile-detail__value">{formatDuration(engagement.mobileDurationMinutes)}</span>
+              </div>
+            ) : null}
+          </div>
           {engagement.mobileCompletionComment ? (
-            <p className="mobile-detail-line">
-              <strong>Commentaire :</strong> {engagement.mobileCompletionComment}
-            </p>
+            <div className="mobile-note">
+              <span className="mobile-note__label">Commentaire</span>
+              <p className="mobile-note__content">{engagement.mobileCompletionComment}</p>
+            </div>
           ) : null}
-          <div className="mobile-prestation-list">
-            <h3>Prestations</h3>
-            <ul>
+          <div className="mobile-card__section">
+            <div className="mobile-section__header mobile-section__header--compact">
+              <h3>Prestations</h3>
+              <span className="mobile-section__subtitle">
+                {options.length ? `${options.length} élément${options.length > 1 ? 's' : ''}` : '—'}
+              </span>
+            </div>
+            <ul className="mobile-prestation-list mobile-prestation-list--surface">
               {options.map((option) => (
                 <li key={option.id}>
-                  <span>{option.label}</span>
-                  <small>
-                    {formatDuration(option.defaultDurationMin)} – {formatCurrency(option.unitPriceHT)} HT
-                  </small>
+                  <div>
+                    <span className="mobile-prestation__label">{option.label}</span>
+                    <span className="mobile-prestation__meta">
+                      {formatDuration(option.defaultDurationMin)} · {formatCurrency(option.unitPriceHT)} HT
+                    </span>
+                  </div>
                 </li>
               ))}
-              {!options.length ? <li>Aucune prestation sélectionnée.</li> : null}
+              {!options.length ? <li className="mobile-prestation__empty">Aucune prestation sélectionnée.</li> : null}
             </ul>
-            <div className="mobile-prestation-summary">
+            <div className="mobile-prestation-summary mobile-prestation-summary--panel">
               <div>
                 <span>Total HT</span>
                 <strong>{formatCurrency(subtotal)}</strong>
@@ -744,11 +932,7 @@ const MobileTestPage = () => {
             >
               {timerButtonLabel}
             </button>
-            <button
-              type="button"
-              className="mobile-button"
-              onClick={() => setView('invoice')}
-            >
+            <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('invoice')}>
               Créer une facture
             </button>
           </div>
@@ -759,27 +943,31 @@ const MobileTestPage = () => {
 
   const renderTimerView = (engagement: Engagement) => {
     const client = clientsById.get(engagement.clientId);
+    const serviceName = servicesById.get(engagement.serviceId)?.name ?? 'Service';
     return (
       <section className="mobile-section mobile-section--timer">
-        <div className="mobile-section__header">
+        <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={handleExitTimerView}>
             Retour
           </button>
           <h1>Service en cours</h1>
         </div>
         <div className="mobile-card mobile-card--timer">
-          <p className="mobile-detail-line mobile-detail-line--center">
-            {client ? client.name : 'Client introuvable'}
-          </p>
-          <p className="mobile-timer__service">{servicesById.get(engagement.serviceId)?.name ?? 'Service'}</p>
-          <div className="mobile-timer__clock">{toClock(displayElapsed)}</div>
+          <div className="mobile-card__title-block mobile-card__title-block--center">
+            <p className="mobile-card__eyebrow">Temps écoulé</p>
+            <div className={`mobile-timer__clock-shell${timerState?.running ? ' mobile-timer__clock-shell--running' : ''}`}>
+              <span className="mobile-timer__clock">{toClock(displayElapsed)}</span>
+            </div>
+            <p className="mobile-card__subtitle">{serviceName}</p>
+            <p className="mobile-card__meta">{client ? client.name : 'Client introuvable'}</p>
+          </div>
           <div className="mobile-timer__controls">
             {timerState?.running ? (
-              <button type="button" className="mobile-button" onClick={handlePauseTimer}>
+              <button type="button" className="mobile-button mobile-button--ghost" onClick={handlePauseTimer}>
                 Pause
               </button>
             ) : (
-              <button type="button" className="mobile-button" onClick={handleResumeTimer}>
+              <button type="button" className="mobile-button mobile-button--ghost" onClick={handleResumeTimer}>
                 Reprendre
               </button>
             )}
@@ -803,13 +991,15 @@ const MobileTestPage = () => {
                   placeholder="Résumé de l’intervention"
                 />
               </label>
-              <button
-                type="button"
-                className="mobile-button mobile-button--primary"
-                onClick={() => handleValidateTimer(engagement)}
-              >
-                Valider
-              </button>
+              <div className="mobile-comment__actions">
+                <button
+                  type="button"
+                  className="mobile-button mobile-button--primary"
+                  onClick={() => handleValidateTimer(engagement)}
+                >
+                  Valider
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
@@ -953,89 +1143,108 @@ const MobileTestPage = () => {
 
     return (
       <section className="mobile-section">
-        <div className="mobile-section__header">
+        <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('details')}>
             Retour
           </button>
           <h1>Facturer le service</h1>
         </div>
         <div className="mobile-card mobile-card--form">
-          <p className="mobile-detail-line">
-            <strong>Client :</strong> {client.name}
-          </p>
-          <p className="mobile-detail-line">
-            <strong>Service :</strong> {service.name}
-          </p>
-          <div className="mobile-prestation-summary mobile-prestation-summary--compact">
-            <div>
-              <span>Total HT</span>
-              <strong>{formatCurrency(subtotal)}</strong>
+          <div className="mobile-card__header">
+            <div className="mobile-card__title-block">
+              <p className="mobile-card__eyebrow">Récapitulatif</p>
+              <h2 className="mobile-card__title">{service.name}</h2>
+              <p className="mobile-card__subtitle">{client.name}</p>
             </div>
-            <div>
-              <span>TVA</span>
-              <strong>{vatEnabledForInvoice ? formatCurrency(vatAmount) : '—'}</strong>
-            </div>
-            <div>
-              <span>Total TTC</span>
-              <strong>{formatCurrency(totalTtc)}</strong>
+            <div className="mobile-prestation-summary mobile-prestation-summary--inline">
+              <div>
+                <span>HT</span>
+                <strong>{formatCurrency(subtotal)}</strong>
+              </div>
+              <div>
+                <span>TVA</span>
+                <strong>{vatEnabledForInvoice ? formatCurrency(vatAmount) : '—'}</strong>
+              </div>
+              <div>
+                <span>TTC</span>
+                <strong>{formatCurrency(totalTtc)}</strong>
+              </div>
             </div>
           </div>
-          <label className="mobile-field">
-            <span>Email supplémentaire</span>
-            <input
-              type="email"
-              value={invoiceEmail}
-              onChange={(event) => setInvoiceEmail(event.target.value)}
-              placeholder="client@example.com"
-            />
-          </label>
-          <fieldset className="mobile-fieldset">
-            <legend>Destinataires</legend>
-            <div className="mobile-checkbox-list">
+          <div className="mobile-card__section">
+            <div className="mobile-section__header mobile-section__header--compact">
+              <h3>Destinataires</h3>
+              <span className="mobile-section__subtitle">
+                {invoiceContactIds.length
+                  ? `${invoiceContactIds.length} sélectionné${invoiceContactIds.length > 1 ? 's' : ''}`
+                  : 'Sélectionnez les contacts'}
+              </span>
+            </div>
+            <label className="mobile-field">
+              <span>Email supplémentaire</span>
+              <input
+                type="email"
+                value={invoiceEmail}
+                onChange={(event) => setInvoiceEmail(event.target.value)}
+                placeholder="client@example.com"
+              />
+            </label>
+            <div className="mobile-checkbox-grid mobile-checkbox-grid--list">
               {client.contacts.length ? (
                 client.contacts.map((contact) => (
-                  <label key={contact.id} className="mobile-checkbox">
+                  <label
+                    key={contact.id}
+                    className={`mobile-checkbox-tile mobile-checkbox-tile--list${!contact.active ? ' mobile-checkbox-tile--disabled' : ''}`}
+                  >
                     <input
                       type="checkbox"
                       checked={invoiceContactIds.includes(contact.id)}
                       onChange={() => handleToggleContact(contact.id)}
                       disabled={!contact.active}
                     />
-                    <span>
-                      <strong>
+                    <div>
+                      <span className="mobile-checkbox-tile__label">
                         {contact.firstName} {contact.lastName}
-                      </strong>
-                      <small>{contact.email || 'Email manquant'}</small>
-                    </span>
+                      </span>
+                      <span className="mobile-checkbox-tile__meta">{contact.email || 'Email manquant'}</span>
+                    </div>
                   </label>
                 ))
               ) : (
-                <p>Aucun contact enregistré pour ce client.</p>
+                <p className="mobile-prestation__empty">Aucun contact enregistré pour ce client.</p>
               )}
             </div>
-          </fieldset>
+          </div>
           {invoiceFeedback ? (
             <p
-              className={`mobile-feedback ${invoiceFeedback.includes('Impossible') ? 'mobile-feedback--error' : ''}`}
+              className={`mobile-feedback mobile-feedback--block ${
+                invoiceFeedback.includes('Impossible') ? 'mobile-feedback--error' : ''
+              }`}
             >
               {invoiceFeedback}
             </p>
           ) : null}
-          <button
-            type="button"
-            className="mobile-button mobile-button--primary"
-            onClick={handleGenerateInvoice}
-            disabled={isGeneratingInvoice}
-          >
-            {isGeneratingInvoice ? 'Génération…' : 'Télécharger la facture'}
-          </button>
+          <div className="mobile-card__footer">
+            <button
+              type="button"
+              className="mobile-button mobile-button--primary"
+              onClick={handleGenerateInvoice}
+              disabled={isGeneratingInvoice}
+            >
+              {isGeneratingInvoice ? 'Génération…' : 'Télécharger la facture'}
+            </button>
+          </div>
         </div>
-        <aside className="mobile-card mobile-card--hint">
-          <h2>Prestations facturées</h2>
-          <ul>
+        <aside className="mobile-card mobile-card--info">
+          <div className="mobile-card__title-block">
+            <p className="mobile-card__eyebrow">Prestations</p>
+            <h2 className="mobile-card__title">Facturées</h2>
+          </div>
+          <ul className="mobile-info-list">
             {options.map((option) => (
               <li key={option.id}>
-                {option.label} – {formatCurrency(option.unitPriceHT)} HT
+                <span className="mobile-info-list__name">{option.label}</span>
+                <span className="mobile-info-list__meta">{formatCurrency(option.unitPriceHT)} HT</span>
               </li>
             ))}
           </ul>
@@ -1051,15 +1260,18 @@ const MobileTestPage = () => {
           <div className="mobile-app__logo" aria-hidden="true">
             WG
           </div>
-          <div>
+          <div className="mobile-app__headline">
             <p className="mobile-app__product">Wash&amp;Go</p>
-            <p className="mobile-app__subtitle">Interface mobile</p>
+            <p className="mobile-app__subtitle">Interface terrain</p>
           </div>
         </div>
-        <div className="mobile-app__user">
-          <span>
-            {userProfile.firstName} {userProfile.lastName}
-          </span>
+        <div className="mobile-app__user-card">
+          <div>
+            <p className="mobile-app__user-name">
+              {userProfile.firstName} {userProfile.lastName}
+            </p>
+            <p className="mobile-app__user-meta">{activeCompany?.name ?? 'Wash&Go'}</p>
+          </div>
           <button type="button" className="mobile-button mobile-button--ghost" onClick={logout}>
             Déconnexion
           </button>
@@ -1080,7 +1292,43 @@ const MobileTestPage = () => {
           </div>
         ) : null}
       </main>
-      <footer className="mobile-app__footer">© {new Date().getFullYear()} Wash&amp;Go</footer>
+      <nav className="mobile-bottom-nav" aria-label="Navigation mobile">
+        <button
+          type="button"
+          className={`mobile-bottom-nav__item${navActiveKey === 'services' ? ' mobile-bottom-nav__item--active' : ''}`}
+          onClick={() => {
+            setView('services');
+            setServiceFilter('all');
+            setSelectedEngagementId(null);
+          }}
+        >
+          <span className="mobile-bottom-nav__label">Services</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-bottom-nav__item${navActiveKey === 'create' ? ' mobile-bottom-nav__item--active' : ''}`}
+          onClick={() => {
+            setView('create');
+          }}
+        >
+          <span className="mobile-bottom-nav__label">Créer</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-bottom-nav__item${navActiveKey === 'timer' ? ' mobile-bottom-nav__item--active' : ''}`}
+          onClick={() => {
+            if (!timerState) {
+              return;
+            }
+            setSelectedEngagementId(timerState.engagementId);
+            setView('timer');
+          }}
+          disabled={!canAccessTimer}
+        >
+          <span className="mobile-bottom-nav__label">Minuteur</span>
+        </button>
+        <span className="mobile-bottom-nav__meta">© {new Date().getFullYear()} Wash&amp;Go</span>
+      </nav>
     </div>
   );
 };
