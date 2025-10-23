@@ -7,6 +7,7 @@ import {
   useAppData,
   type Client,
   type ClientContact,
+  type CommercialDocumentStatus,
   type Engagement,
   type Service,
   type ServiceOption,
@@ -653,7 +654,7 @@ const MobileTestPage = () => {
     const subtotal = totals.price + totals.surcharge;
     const vatAmount = vatEnabledForInvoice ? Math.round(subtotal * vatMultiplier * 100) / 100 : 0;
     const totalTtc = vatEnabledForInvoice ? subtotal + vatAmount : subtotal;
-    const timerRunningElsewhere = timerState && timerState.engagementId !== engagement.id;
+    const timerRunningElsewhere = !!timerState && timerState.engagementId !== engagement.id;
     const isCurrentServiceTiming = timerState && timerState.engagementId === engagement.id;
     const timerButtonLabel = timerRunningElsewhere
       ? 'Minuteur en cours ailleurs'
@@ -864,18 +865,20 @@ const MobileTestPage = () => {
         return;
       }
       const recipientsContacts = client.contacts.filter((contact) => invoiceContactIds.includes(contact.id));
-      const emails = unique(
-        [
-          ...recipientsContacts.map((contact) => contact.email).filter((value): value is string => Boolean(value)),
-          invoiceEmail && isValidEmail(invoiceEmail) ? invoiceEmail.trim() : null,
-        ].filter(Boolean)
-      );
+      const emailCandidates: string[] = recipientsContacts
+        .map((contact) => contact.email)
+        .filter((value): value is string => Boolean(value));
+      if (invoiceEmail && isValidEmail(invoiceEmail)) {
+        emailCandidates.push(invoiceEmail.trim());
+      }
+      const emails = unique(emailCandidates);
       const issueDate = new Date();
       const documentNumber = engagement.invoiceNumber ?? getNextInvoiceNumber(engagements, issueDate);
       const vatEnabledForDocument = vatEnabledForInvoice;
 
       setIsGeneratingInvoice(true);
       try {
+        const documentStatus: CommercialDocumentStatus = engagement.status === 'réalisé' ? 'payé' : 'envoyé';
         const pdf = generateInvoicePdf({
           documentNumber,
           issueDate,
@@ -911,7 +914,7 @@ const MobileTestPage = () => {
           kind: 'facture' as const,
           engagementId: engagement.id,
           number: documentNumber,
-          status: engagement.status === 'réalisé' ? 'payé' : 'envoyé',
+          status: documentStatus,
           totalHt: subtotal,
           totalTtc: totalTtc,
           vatAmount: vatEnabledForDocument ? vatAmount : 0,
