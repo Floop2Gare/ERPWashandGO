@@ -8,6 +8,7 @@ import {
   type Client,
   type ClientContact,
   type CommercialDocumentStatus,
+  type DocumentRecord,
   type Engagement,
   type EngagementStatus,
   type Service,
@@ -720,7 +721,7 @@ const MobileTestPage = () => {
                     type="checkbox"
                     checked={createOptionIds.includes(option.id)}
                     onChange={() => handleToggleOption(option.id)}
-                    disabled={!option.active}
+                    disabled={option.active === false}
                   />
                   <div>
                     <span className="mobile-checkbox-tile__label">{option.label}</span>
@@ -1037,20 +1038,22 @@ const MobileTestPage = () => {
         return;
       }
       const recipientsContacts = client.contacts.filter((contact) => invoiceContactIds.includes(contact.id));
-      const emailCandidates: string[] = recipientsContacts
+      const emailCandidates = recipientsContacts
         .map((contact) => contact.email)
-        .filter((value): value is string => Boolean(value));
+        .filter((value): value is string => Boolean(value && value.trim().length))
+        .map((value) => value.trim());
       if (invoiceEmail && isValidEmail(invoiceEmail)) {
         emailCandidates.push(invoiceEmail.trim());
       }
-      const emails = unique(emailCandidates);
+      const emails = Array.from(new Set(emailCandidates));
       const issueDate = new Date();
       const documentNumber = engagement.invoiceNumber ?? getNextInvoiceNumber(engagements, issueDate);
       const vatEnabledForDocument = vatEnabledForInvoice;
 
       setIsGeneratingInvoice(true);
       try {
-        const documentStatus: CommercialDocumentStatus = engagement.status === 'réalisé' ? 'payé' : 'envoyé';
+        const documentStatus: CommercialDocumentStatus =
+          engagement.status === 'réalisé' ? 'payé' : 'envoyé';
         const pdf = generateInvoicePdf({
           documentNumber,
           issueDate,
@@ -1071,7 +1074,7 @@ const MobileTestPage = () => {
         const pdfDataUri = pdf.output('datauristring');
         const blob = pdf.output('blob');
 
-        const payload = {
+        const payload: Omit<DocumentRecord, 'id' | 'updatedAt'> & { updatedAt?: string } = {
           title: `${documentNumber} — ${client.name}`,
           category: 'Factures',
           description: `Facture générée le ${formatDate(issueDate.toISOString())} pour ${client.name}.`,
@@ -1182,7 +1185,7 @@ const MobileTestPage = () => {
                       type="checkbox"
                       checked={invoiceContactIds.includes(contact.id)}
                       onChange={() => handleToggleContact(contact.id)}
-                      disabled={!contact.active}
+                      disabled={contact.active === false}
                     />
                     <div>
                       <span className="mobile-checkbox-tile__label">
