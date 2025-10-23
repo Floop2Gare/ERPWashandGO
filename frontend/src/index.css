@@ -426,7 +426,7 @@ body[data-theme='dark'] ::placeholder {
 .data-table thead th,
 .data-table__header-cell {
   padding: 0.75rem 1rem;
-  background: rgba(var(--accent-rgb) / 0.04);
+  background: var(--surface);
   color: var(--txt-muted);
   font-size: 0.6875rem;
   font-weight: 600;
@@ -435,6 +435,7 @@ body[data-theme='dark'] ::placeholder {
   vertical-align: middle;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .data-table__header-cell--optional,
@@ -786,9 +787,11 @@ body .focus\:ring-primary:focus {
 }
 
 .table-header-cell {
-  background: transparent;
+  background: var(--surface);
   color: var(--txt-muted);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
+  z-index: 2;
 }
 
 .table-body-cell {
