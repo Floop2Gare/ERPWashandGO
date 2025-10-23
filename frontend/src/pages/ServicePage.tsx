@@ -624,6 +624,7 @@ const ServicePage = () => {
     });
   }, [clientsById]);
 
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   const creationSectionRef = useRef<HTMLDivElement | null>(null);
   const editSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -1324,8 +1325,9 @@ const ServicePage = () => {
     });
     setHighlightQuote(false);
     setIsAddingClient(false);
-    setSelectedEngagementId(engagement.id);
-    setEditDraft(buildDraftFromEngagement(engagement));
+    setSelectedEngagementIds([]);
+    setSelectedEngagementId(null);
+    setEditDraft(null);
 
     if (options?.sendAsQuote) {
       await handleGenerateQuote(engagement, 'email', { autoCreated: true });
@@ -1333,6 +1335,7 @@ const ServicePage = () => {
       setFeedback('Service enregistré.');
     }
     setCreationMode(null);
+    scrollToList();
   };
 
   const sendInvoiceEmail = async ({
@@ -1924,6 +1927,12 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
     setHighlightQuote(false);
   };
 
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
   const anyVatEnabled = engagements.some((engagement) => {
     const companyRef = engagement.companyId ? companiesById.get(engagement.companyId) : null;
     const resolvedVat = engagement.invoiceVatEnabled ?? (companyRef ? companyRef.vatEnabled : vatEnabled);
@@ -1976,31 +1985,31 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
           onClick={(event) => event.stopPropagation()}
           aria-label={`Sélectionner ${documentLabels[engagement.kind]} ${documentNumber}`}
         />
-        <div className="space-y-1 text-[11px] text-slate-600">
-          <p className="truncate text-sm font-semibold text-slate-900" title={documentLabels[engagement.kind]}>
+        <div className="space-y-1 text-[11px] text-muted">
+          <p className="truncate text-sm font-semibold text-text" title={documentLabels[engagement.kind]}>
             {documentLabels[engagement.kind]}
           </p>
-          <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">{documentNumber}</p>
-          <p className="text-[10px] text-slate-500">{formatDate(engagement.scheduledAt)}</p>
+          <p className="text-[10px] uppercase tracking-[0.28em] text-muted/80">{documentNumber}</p>
+          <p className="text-[10px] text-muted">{formatDate(engagement.scheduledAt)}</p>
         </div>
       </div>,
-      <div key={`${engagement.id}-client`} className="space-y-1 text-[11px] text-slate-600">
-        <p className="truncate font-semibold text-slate-900" title={client?.name ?? 'Client inconnu'}>
+      <div key={`${engagement.id}-client`} className="space-y-1 text-[11px] text-muted">
+        <p className="truncate font-semibold text-text" title={client?.name ?? 'Client inconnu'}>
           {client?.name ?? 'Client inconnu'}
         </p>
-        <p className="truncate text-[10px] text-slate-500" title={company?.name ?? '—'}>
+        <p className="truncate text-[10px] text-muted" title={company?.name ?? '—'}>
           {company?.name ?? '—'}
         </p>
       </div>,
-      <div key={`${engagement.id}-support`} className="space-y-1 text-[11px] text-slate-600">
+      <div key={`${engagement.id}-support`} className="space-y-1 text-[11px] text-muted">
         <p>{engagement.supportType}</p>
-        {engagement.supportDetail && <p className="text-[11px] text-slate-500">{engagement.supportDetail}</p>}
+        {engagement.supportDetail && <p className="text-[11px] text-muted">{engagement.supportDetail}</p>}
       </div>,
-      <div key={`${engagement.id}-service`} className="space-y-1 text-[11px] text-slate-600">
-        <p className="truncate font-semibold text-slate-900" title={service?.name ?? 'Service archivé'}>
+      <div key={`${engagement.id}-service`} className="space-y-1 text-[11px] text-muted">
+        <p className="truncate font-semibold text-text" title={service?.name ?? 'Service archivé'}>
           {service?.name ?? 'Service archivé'}
         </p>
-        <p className="text-[10px] text-slate-500" title={
+        <p className="text-[10px] text-muted" title={
           optionsSelected.length > 0
             ? optionsSelected.map((option) => option.label).join(' • ')
             : 'Aucune prestation sélectionnée'
@@ -2010,23 +2019,23 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             : 'Aucune prestation sélectionnée'}
         </p>
       </div>,
-      <span key={`${engagement.id}-duration`} className="text-[11px] font-medium text-slate-700">
+      <span key={`${engagement.id}-duration`} className="text-[11px] font-medium text-text">
         {totals.duration ? formatDuration(totals.duration) : '—'}
       </span>,
-      <span key={`${engagement.id}-ht`} className="text-[11px] font-semibold text-slate-800">
+      <span key={`${engagement.id}-ht`} className="text-[11px] font-semibold text-text">
         {formatCurrency(totals.price)}
       </span>,
       ...(vatEnabledForRow
         ? [
-            <span key={`${engagement.id}-vat`} className="text-[11px] text-slate-700">
+            <span key={`${engagement.id}-vat`} className="text-[11px] text-text">
               {formatCurrency(vatAmount)}
             </span>,
           ]
         : []),
-      <div key={`${engagement.id}-ttc`} className="text-[11px] font-semibold text-slate-900">
+      <div key={`${engagement.id}-ttc`} className="text-[11px] font-semibold text-text">
         <p>{formatCurrency(finalTotal)}</p>
         {totals.surcharge > 0 && (
-          <p className="text-[10px] font-normal text-slate-500">
+          <p className="text-[10px] font-normal text-muted">
             Majoration incluse : {formatCurrency(totals.surcharge)}
           </p>
         )}
@@ -2135,43 +2144,44 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
     <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-3">
         <Card padding="sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Prestations suivies</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{summary.count}</p>
-          <p className="text-xs text-slate-500">{summary.pipeline} en cours de traitement</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted/80">Prestations suivies</p>
+          <p className="mt-3 text-3xl font-semibold text-text">{summary.count}</p>
+          <p className="text-xs text-muted">{summary.pipeline} en cours de traitement</p>
         </Card>
         <Card padding="sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">CA HT cumulé</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{formatCurrency(summary.revenue)}</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted/80">CA HT cumulé</p>
+          <p className="mt-3 text-3xl font-semibold text-text">{formatCurrency(summary.revenue)}</p>
+          <p className="text-xs text-muted">
             HT hors majorations — Majoration cumulée{' '}
-            <span className="font-medium text-slate-700">
+            <span className="font-medium text-text">
               {summary.surcharge ? formatCurrency(summary.surcharge) : '—'}
             </span>
           </p>
         </Card>
         <Card padding="sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Durée planifiée</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{formatDuration(summary.duration)}</p>
-          <p className="text-xs text-slate-500">Somme des interventions programmées</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted/80">Durée planifiée</p>
+          <p className="mt-3 text-3xl font-semibold text-text">{formatDuration(summary.duration)}</p>
+          <p className="text-xs text-muted">Somme des interventions programmées</p>
         </Card>
       </div>
 
-      <Card
-        title="Service"
-        description="Visualisez et pilotez chaque prestation"
-        action={
-          hasPermission('service.create') ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={() => openCreation()}>
-                Créer un service
-              </Button>
-            </div>
-          ) : undefined
-        }
-      >
+      <div ref={listSectionRef}>
+        <Card
+          title="Service"
+          description="Visualisez et pilotez chaque prestation"
+          action={
+            hasPermission('service.create') ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" onClick={() => openCreation()}>
+                  Créer un service
+                </Button>
+              </div>
+            ) : undefined
+          }
+        >
         <div className="grid gap-4 lg:grid-cols-4">
           <div className="lg:col-span-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="service-search">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="service-search">
               Recherche
             </label>
             <input
@@ -2179,18 +2189,18 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Client, service, prestation..."
-              className="mt-1 w-full rounded-soft border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full rounded-soft border border-border bg-surface px-4 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="service-status">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="service-status">
               Statut
             </label>
             <select
               id="service-status"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as EngagementStatus | 'Tous')}
-              className="mt-1 w-full rounded-soft border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full rounded-soft border border-border bg-surface px-4 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               <option value="Tous">Tous</option>
               <option value="brouillon">Brouillon</option>
@@ -2201,14 +2211,14 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="service-kind">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="service-kind">
               Type
             </label>
             <select
               id="service-kind"
               value={kindFilter}
               onChange={(event) => setKindFilter(event.target.value as EngagementKind | 'Tous')}
-              className="mt-1 w-full rounded-soft border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full rounded-soft border border-border bg-surface px-4 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               <option value="Tous">Tous</option>
               <option value="service">Service</option>
@@ -2217,14 +2227,14 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="service-company">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="service-company">
               Entreprise
             </label>
             <select
               id="service-company"
               value={companyFilter}
               onChange={(event) => setCompanyFilter(event.target.value as 'Toutes' | string)}
-              className="mt-1 w-full rounded-soft border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full rounded-soft border border-border bg-surface px-4 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               <option value="Toutes">Toutes</option>
               {companies.map((company) => (
@@ -2239,16 +2249,16 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
         {feedback && <p className="mt-4 text-xs font-medium text-primary">{feedback}</p>}
 
         {mailPrompt && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-soft border border-border bg-surface px-3 py-2 text-xs text-muted">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <span className="font-semibold text-slate-700">
+              <span className="font-semibold text-text">
                 Envoyer les informations du service « {mailPrompt.serviceName} »
               </span>
               {clientsWithEmail.length ? (
                 <select
                   value={mailPromptClientId}
                   onChange={(event) => setMailPromptClientId(event.target.value)}
-                  className="rounded-soft border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="rounded-soft border border-border bg-surface px-3 py-1 text-xs text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   {clientsWithEmail.map((client) => (
                     <option key={client.id} value={client.id}>
@@ -2257,7 +2267,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   ))}
                 </select>
               ) : (
-                <span className="text-slate-400">Aucun contact avec e-mail disponible.</span>
+                <span className="text-muted/80">Aucun contact avec e-mail disponible.</span>
               )}
             </div>
             <div className="flex gap-2">
@@ -2277,7 +2287,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
         )}
 
         <div className="mt-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-muted">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -2289,7 +2299,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             </div>
             {!!selectedEngagementIds.length && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-slate-400">|</span>
+                <span className="text-muted/80">|</span>
                 <span>{selectedEngagementIds.length} sélectionnées</span>
                 {hasPermission('service.print') && (
                   <Button variant="ghost" size="xs" onClick={handleBulkPrintEngagements}>
@@ -2314,7 +2324,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 <button
                   type="button"
                   onClick={clearSelectedEngagements}
-                  className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400 transition hover:text-slate-600"
+                  className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted/80 transition hover:text-text"
                 >
                   Vider la sélection
                 </button>
@@ -2334,7 +2344,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             rowClassName={engagementRowClassName}
           />
         </div>
-      </Card>
+        </Card>
+      </div>
 
       {creationMode && (
         <div ref={creationSectionRef}>
@@ -2344,7 +2355,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             action={
               <button
                 type="button"
-                className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400 transition hover:text-slate-600"
+                className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted/80 transition hover:text-text"
                 onClick={closeCreation}
               >
                 Fermer
@@ -2356,18 +2367,18 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
               await handleCreateService();
             }}
-            className="space-y-5 text-sm text-slate-700"
+            className="space-y-5 text-sm text-text"
           >
             <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-x-3 md:gap-y-2">
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-client">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="create-client">
                   Client
                 </label>
                 <select
                   id="create-client"
                   value={creationDraft.clientId}
                   onChange={(event) => setCreationDraft((draft) => ({ ...draft, clientId: event.target.value }))}
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">Sélectionner…</option>
                   {clients.map((client) => (
@@ -2379,13 +2390,13 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 <button
                   type="button"
                   onClick={() => setIsAddingClient((value) => !value)}
-                  className="self-start text-[11px] font-semibold tracking-[0.2em] text-slate-500 underline decoration-slate-300 decoration-1 underline-offset-4 hover:text-slate-800"
+                  className="self-start text-[11px] font-semibold tracking-[0.2em] text-muted underline decoration-border decoration-1 underline-offset-4 hover:text-text"
                 >
                   {isAddingClient ? 'Annuler l’ajout' : 'Ajouter un client'}
                 </button>
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-company">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="create-company">
                   Entreprise
                 </label>
                 <select
@@ -2394,7 +2405,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   onChange={(event) =>
                     setCreationDraft((draft) => ({ ...draft, companyId: event.target.value as string | '' }))
                   }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">Sélectionner…</option>
                   {companies.map((company) => (
@@ -2405,7 +2416,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-status">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="create-status">
                   Statut
                 </label>
                 <select
@@ -2414,7 +2425,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   onChange={(event) =>
                     setCreationDraft((draft) => ({ ...draft, status: event.target.value as EngagementStatus }))
                   }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="brouillon">Brouillon</option>
                   <option value="envoyé">Envoyé</option>
@@ -2424,7 +2435,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-date">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="create-date">
                   Date prévue
                 </label>
                 <input
@@ -2434,11 +2445,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   onChange={(event) =>
                     setCreationDraft((draft) => ({ ...draft, scheduledAt: event.target.value }))
                   }
-                  className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
               {isAddingClient && (
-                <div className="md:col-span-12 rounded-soft border border-dashed border-slate-300 bg-white/80 p-3">
+                <div className="md:col-span-12 rounded-soft border border-dashed border-border bg-surface/80 p-3">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
                     <input
                       required
@@ -2447,7 +2458,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         setQuickClientDraft((draft) => ({ ...draft, name: event.target.value }))
                       }
                       placeholder="Nom de l’organisation"
-                      className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <input
                       required
@@ -2456,7 +2467,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         setQuickClientDraft((draft) => ({ ...draft, siret: event.target.value }))
                       }
                       placeholder="SIRET"
-                      className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <input
                       value={quickClientDraft.email}
@@ -2464,7 +2475,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         setQuickClientDraft((draft) => ({ ...draft, email: event.target.value }))
                       }
                       placeholder="Email"
-                      className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <input
                       value={quickClientDraft.phone}
@@ -2472,7 +2483,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         setQuickClientDraft((draft) => ({ ...draft, phone: event.target.value }))
                       }
                       placeholder="Téléphone"
-                      className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <input
                       value={quickClientDraft.address}
@@ -2480,7 +2491,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         setQuickClientDraft((draft) => ({ ...draft, address: event.target.value }))
                       }
                       placeholder="Adresse"
-                      className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <input
                       value={quickClientDraft.city}
@@ -2488,11 +2499,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         setQuickClientDraft((draft) => ({ ...draft, city: event.target.value }))
                       }
                       placeholder="Ville"
-                      className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <div className="col-span-full flex flex-wrap gap-3 text-[11px]">
                       {(['Actif', 'Prospect'] as Client['status'][]).map((status) => (
-                        <label key={status} className="inline-flex items-center gap-2 text-slate-500">
+                        <label key={status} className="inline-flex items-center gap-2 text-muted">
                           <input
                             type="radio"
                             name="client-status"
@@ -2518,8 +2529,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   </div>
                 </div>
               )}
-              <div className="md:col-span-12 rounded-soft border border-slate-200 bg-slate-50/80 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <div className="md:col-span-12 rounded-soft border border-border bg-surface/90 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
                   Contacts destinataires
                 </p>
                 {creationContacts.length ? (
@@ -2530,10 +2541,10 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       return (
                         <label
                           key={contact.id}
-                          className="flex items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-600 transition hover:border-primary/40"
+                          className="flex items-center justify-between gap-3 rounded-soft border border-border bg-surface px-3 py-2 text-[13px] text-muted transition hover:border-primary/40"
                         >
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="font-semibold text-slate-800">
+                            <span className="font-semibold text-text">
                               {fullName || contact.email}
                             </span>
                             {contact.isBillingDefault && (
@@ -2542,13 +2553,13 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                               </span>
                             )}
                             {contact.roles.length > 0 && (
-                              <span className="flex flex-wrap gap-1 text-[11px] text-slate-500">
+                              <span className="flex flex-wrap gap-1 text-[11px] text-muted">
                                 {contact.roles.map((role) => (
                                   <Tag key={`${contact.id}-${role}`}>{role}</Tag>
                                 ))}
                               </span>
                             )}
-                            <span className="text-[12px] text-slate-500">
+                            <span className="text-[12px] text-muted">
                               {contact.email} {contact.mobile ? `• ${contact.mobile}` : ''}
                             </span>
                           </div>
@@ -2557,7 +2568,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                               <button
                                 type="button"
                                 onClick={() => setClientBillingContact(creationDraft.clientId, contact.id)}
-                                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 hover:text-primary"
+                                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted/80 hover:text-primary"
                               >
                                 Défaut
                               </button>
@@ -2574,13 +2585,13 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     })}
                   </div>
                 ) : (
-                  <p className="mt-2 text-[11px] text-slate-400">
+                  <p className="mt-2 text-[11px] text-muted/80">
                     Ajoutez un contact sur la fiche client pour sélectionner les destinataires.
                   </p>
                 )}
               </div>
               <div className="md:col-span-12 flex flex-col gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80">
                   Support
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -2592,8 +2603,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       className={clsx(
                         'rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition',
                         creationDraft.supportType === type
-                          ? 'border-slate-600 text-slate-900'
-                          : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
+                          ? 'border-primary text-text'
+                          : 'border-border text-muted hover:border-primary/40 hover:text-text'
                       )}
                     >
                       {type}
@@ -2606,11 +2617,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     setCreationDraft((draft) => ({ ...draft, supportDetail: event.target.value }))
                   }
                   placeholder="Détail du support (ex. SUV, 3 places…)"
-                  className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
               <div className="md:col-span-12 flex flex-col gap-2">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-service">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="create-service">
                   Service
                 </label>
                 <select
@@ -2624,7 +2635,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       optionOverrides: {},
                     }))
                   }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">Sélectionner…</option>
                   {services.map((service) => (
@@ -2634,15 +2645,15 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   ))}
                 </select>
               </div>
-              <div className="md:col-span-12 space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+              <div className="md:col-span-12 space-y-3 rounded-soft border border-border bg-surface/80 p-3 text-xs text-muted">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Prestations</p>
-                  <div className="text-right text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Prestations</p>
+                  <div className="text-right text-[11px] uppercase tracking-[0.18em] text-muted">
                     <p>Durée estimée</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                    <p className="mt-1 text-sm font-semibold text-text">
                       {creationTotals.duration ? formatDuration(creationTotals.duration) : '—'}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted">
                       {creationVatEnabled
                         ? `${formatCurrency(creationTotals.price)} HT · ${formatCurrency(creationTotalTtc)} TTC`
                         : `${formatCurrency(creationTotals.price)} HT`}
@@ -2659,8 +2670,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         className={clsx(
                           'rounded border px-3 py-2 transition',
                           selected
-                            ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
-                            : 'border-slate-200 bg-white/70 text-slate-600'
+                            ? 'border-primary/40 bg-surface text-text shadow-sm'
+                            : 'border-border bg-surface/70 text-muted'
                         )}
                       >
                         <label className="flex items-center justify-between gap-3 text-xs font-medium">
@@ -2671,19 +2682,19 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                               onChange={() => toggleCreationOption(option.id)}
                               className="h-3.5 w-3.5 accent-primary"
                             />
-                            <span className="text-slate-800">{option.label}</span>
+                            <span className="text-text">{option.label}</span>
                           </span>
-                          <span className="text-[11px] text-slate-500">
+                          <span className="text-[11px] text-muted">
                             {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
                           </span>
                         </label>
                         {option.description && (
-                          <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
+                          <p className="ml-6 mt-1 text-[11px] text-muted">{option.description}</p>
                         )}
                         {selected && (
                           <div className="mt-3 grid gap-2 sm:grid-cols-3">
                             <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                                 Quantité
                               </span>
                               <input
@@ -2696,11 +2707,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                                     quantity: Number.parseFloat(event.target.value) || 1,
                                   })
                                 }
-                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="rounded-soft border border-border bg-surface px-2 py-1.5 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                               />
                             </label>
                             <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                                 Durée (min)
                               </span>
                               <input
@@ -2713,11 +2724,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                                     durationMin: Number.parseFloat(event.target.value) || 0,
                                   })
                                 }
-                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="rounded-soft border border-border bg-surface px-2 py-1.5 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                               />
                             </label>
                             <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                                 Prix HT (€)
                               </span>
                               <input
@@ -2730,7 +2741,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                                     unitPriceHT: Number.parseFloat(event.target.value) || 0,
                                   })
                                 }
-                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="rounded-soft border border-border bg-surface px-2 py-1.5 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                               />
                             </label>
                           </div>
@@ -2739,7 +2750,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     );
                   })
                 ) : (
-                  <p className="text-[11px] text-slate-400">Sélectionnez un service pour afficher les prestations.</p>
+                  <p className="text-[11px] text-muted/80">Sélectionnez un service pour afficher les prestations.</p>
                 )}
               </div>
             </div>
@@ -2748,28 +2759,28 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
 
             <div
               className={clsx(
-                'grid gap-3 rounded-soft border border-slate-200 bg-slate-50/60 p-3 text-[11px] uppercase tracking-[0.2em] text-slate-500',
+                'grid gap-3 rounded-soft border border-border bg-surface/80 p-3 text-[11px] uppercase tracking-[0.2em] text-muted',
                 creationVatEnabled ? 'md:grid-cols-4' : 'md:grid-cols-3'
               )}
             >
               <div>
-                <p className="text-slate-400">Durée totale</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">
+                <p className="text-muted/80">Durée totale</p>
+                <p className="mt-1 text-sm font-semibold text-text">
                   {creationTotals.duration ? formatDuration(creationTotals.duration) : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-slate-400">Montant HT</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(creationTotals.price)}</p>
+                <p className="text-muted/80">Montant HT</p>
+                <p className="mt-1 text-sm font-semibold text-text">{formatCurrency(creationTotals.price)}</p>
               </div>
               {creationVatEnabled && (
                 <div>
-                  <p className="text-slate-400">{vatLabel}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(creationVatAmount)}</p>
+                  <p className="text-muted/80">{vatLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-text">{formatCurrency(creationVatAmount)}</p>
                 </div>
               )}
               <div>
-                <label className="text-slate-400" htmlFor="creation-surcharge">
+                <label className="text-muted/80" htmlFor="creation-surcharge">
                   Majoration (TTC)
                 </label>
                 <input
@@ -2785,17 +2796,17 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       additionalCharge: Number.isNaN(value) ? 0 : Math.max(0, value),
                     }));
                   }}
-                  className="mt-1 w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="mt-1 w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-soft border border-border bg-surface/70 px-3 py-2 text-xs text-muted">
               <div>
                 {creationSelectedOptions.length > 0 ? (
                   <p>
                     Prestations sélectionnées :{' '}
-                    <span className="font-medium text-slate-700">
+                    <span className="font-medium text-text">
                       {creationSelectedOptions
                         .map(({ option, override }) =>
                           `${override.quantity.toFixed(0)} × ${option.label}`
@@ -2807,16 +2818,16 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   <p>Aucune prestation sélectionnée pour le moment.</p>
                 )}
                 {creationTotals.surcharge > 0 && (
-                  <p className="mt-1 text-[10px] text-slate-500">
+                  <p className="mt-1 text-[10px] text-muted">
                     Majoration incluse : {formatCurrency(creationTotals.surcharge)}
                   </p>
                 )}
               </div>
-              <div className="text-right text-slate-700">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <div className="text-right text-text">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {creationVatEnabled ? 'Total TTC' : 'Total'}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(creationTotalTtc)}</p>
+                <p className="mt-1 text-sm font-semibold text-text">{formatCurrency(creationTotalTtc)}</p>
               </div>
             </div>
 
@@ -2844,7 +2855,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             action={
               <button
                 type="button"
-                className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400 transition hover:text-slate-600"
+                className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted/80 transition hover:text-text"
                 onClick={() => {
                   setSelectedEngagementId(null);
                   setEditDraft(null);
@@ -2854,17 +2865,17 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
               </button>
             }
           >
-          <form onSubmit={handleEditSubmit} className="space-y-5 text-sm text-slate-700">
+          <form onSubmit={handleEditSubmit} className="space-y-5 text-sm text-text">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-x-3 md:gap-y-2">
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-client">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="edit-client">
                   Client
                 </label>
                 <select
                   id="edit-client"
                   value={editDraft.clientId}
                   onChange={(event) => setEditDraft((draft) => (draft ? { ...draft, clientId: event.target.value } : draft))}
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">Sélectionner…</option>
                   {clients.map((client) => (
@@ -2875,7 +2886,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-company">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="edit-company">
                   Entreprise
                 </label>
                 <select
@@ -2884,7 +2895,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   onChange={(event) =>
                     setEditDraft((draft) => (draft ? { ...draft, companyId: event.target.value as string | '' } : draft))
                   }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">Sélectionner…</option>
                   {companies.map((company) => (
@@ -2895,7 +2906,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-status">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="edit-status">
                   Statut
                 </label>
                 <select
@@ -2904,7 +2915,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   onChange={(event) =>
                     setEditDraft((draft) => (draft ? { ...draft, status: event.target.value as EngagementStatus } : draft))
                   }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="brouillon">Brouillon</option>
                   <option value="envoyé">Envoyé</option>
@@ -2914,7 +2925,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-6">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-date">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="edit-date">
                   Date prévue
                 </label>
                 <input
@@ -2922,11 +2933,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   type="date"
                   value={editDraft.scheduledAt}
                   onChange={(event) => setEditDraft((draft) => (draft ? { ...draft, scheduledAt: event.target.value } : draft))}
-                  className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
-              <div className="md:col-span-12 rounded-soft border border-slate-200 bg-slate-50/80 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <div className="md:col-span-12 rounded-soft border border-border bg-surface/80 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
                   Contacts destinataires
                 </p>
                 {editContacts.length ? (
@@ -2937,21 +2948,21 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       return (
                         <label
                           key={contact.id}
-                          className="flex items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-600 transition hover:border-primary/40"
+                          className="flex items-center justify-between gap-3 rounded-soft border border-border bg-surface px-3 py-2 text-[13px] text-muted transition hover:border-primary/40"
                         >
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="font-semibold text-slate-800">{fullName || contact.email}</span>
+                            <span className="font-semibold text-text">{fullName || contact.email}</span>
                             {contact.isBillingDefault && (
                               <span className="text-[10px] uppercase tracking-[0.18em] text-primary">Facturation par défaut</span>
                             )}
                             {contact.roles.length > 0 && (
-                              <span className="flex flex-wrap gap-1 text-[11px] text-slate-500">
+                              <span className="flex flex-wrap gap-1 text-[11px] text-muted">
                                 {contact.roles.map((role) => (
                                   <Tag key={`${contact.id}-${role}`}>{role}</Tag>
                                 ))}
                               </span>
                             )}
-                            <span className="text-[12px] text-slate-500">
+                            <span className="text-[12px] text-muted">
                               {contact.email} {contact.mobile ? `• ${contact.mobile}` : ''}
                             </span>
                           </div>
@@ -2960,7 +2971,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                               <button
                                 type="button"
                                 onClick={() => setClientBillingContact(editDraft.clientId, contact.id)}
-                                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 hover:text-primary"
+                                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted/80 hover:text-primary"
                               >
                                 Défaut
                               </button>
@@ -2977,13 +2988,13 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     })}
                   </div>
                 ) : (
-                  <p className="mt-2 text-[11px] text-slate-400">
+                  <p className="mt-2 text-[11px] text-muted/80">
                     Aucun contact actif pour cette organisation.
                   </p>
                 )}
               </div>
               <div className="md:col-span-12 flex flex-col gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80">
                   Support
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -2995,8 +3006,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       className={clsx(
                         'rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition',
                         editDraft.supportType === type
-                          ? 'border-slate-600 text-slate-900'
-                          : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
+                          ? 'border-primary text-text'
+                          : 'border-border text-muted hover:border-primary/40 hover:text-text'
                       )}
                     >
                       {type}
@@ -3007,11 +3018,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   value={editDraft.supportDetail}
                   onChange={(event) => setEditDraft((draft) => (draft ? { ...draft, supportDetail: event.target.value } : draft))}
                   placeholder="Détail du support"
-                  className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
               <div className="md:col-span-12 flex flex-col gap-2">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-service">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted/80" htmlFor="edit-service">
                   Service
                 </label>
                 <select
@@ -3029,7 +3040,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         : draft
                     )
                   }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">Sélectionner…</option>
                   {services.map((service) => (
@@ -3039,15 +3050,15 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   ))}
                 </select>
               </div>
-              <div className="md:col-span-12 space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+              <div className="md:col-span-12 space-y-3 rounded-soft border border-border bg-surface/80 p-3 text-xs text-muted">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Prestations</p>
-                  <div className="text-right text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Prestations</p>
+                  <div className="text-right text-[11px] uppercase tracking-[0.18em] text-muted">
                     <p>Durée estimée</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                    <p className="mt-1 text-sm font-semibold text-text">
                       {editTotals.duration ? formatDuration(editTotals.duration) : '—'}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted">
                       {editVatEnabled
                         ? `${formatCurrency(editTotals.price)} HT · ${formatCurrency(editTotalTtc)}`
                         : `${formatCurrency(editTotals.price)} HT`}
@@ -3064,8 +3075,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         className={clsx(
                           'rounded border px-3 py-2 transition',
                           selected
-                            ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
-                            : 'border-slate-200 bg-white/70 text-slate-600'
+                            ? 'border-primary/40 bg-surface text-text shadow-sm'
+                            : 'border-border bg-surface/70 text-muted'
                         )}
                       >
                         <label className="flex items-center justify-between gap-3 text-xs font-medium">
@@ -3076,19 +3087,19 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                               onChange={() => toggleEditOption(option.id)}
                               className="h-3.5 w-3.5 accent-primary"
                             />
-                            <span className="text-slate-800">{option.label}</span>
+                            <span className="text-text">{option.label}</span>
                           </span>
-                          <span className="text-[11px] text-slate-500">
+                          <span className="text-[11px] text-muted">
                             {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
                           </span>
                         </label>
                         {option.description && (
-                          <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
+                          <p className="ml-6 mt-1 text-[11px] text-muted">{option.description}</p>
                         )}
                         {selected && (
                           <div className="mt-3 grid gap-2 sm:grid-cols-3">
                             <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                                 Quantité
                               </span>
                               <input
@@ -3101,11 +3112,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                                     quantity: Number.parseFloat(event.target.value) || 1,
                                   })
                                 }
-                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="rounded-soft border border-border bg-surface px-2 py-1.5 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                               />
                             </label>
                             <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                                 Durée (min)
                               </span>
                               <input
@@ -3118,11 +3129,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                                     durationMin: Number.parseFloat(event.target.value) || 0,
                                   })
                                 }
-                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="rounded-soft border border-border bg-surface px-2 py-1.5 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                               />
                             </label>
                             <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                                 Prix HT (€)
                               </span>
                               <input
@@ -3135,7 +3146,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                                     unitPriceHT: Number.parseFloat(event.target.value) || 0,
                                   })
                                 }
-                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="rounded-soft border border-border bg-surface px-2 py-1.5 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                               />
                             </label>
                           </div>
@@ -3144,7 +3155,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     );
                   })
                 ) : (
-                  <p className="text-[11px] text-slate-400">Choisissez un service pour afficher les prestations.</p>
+                  <p className="text-[11px] text-muted/80">Choisissez un service pour afficher les prestations.</p>
                 )}
               </div>
             </div>
@@ -3153,28 +3164,28 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
 
             <div
               className={clsx(
-                'grid gap-3 rounded-soft border border-slate-200 bg-slate-50/60 p-3 text-[11px] uppercase tracking-[0.2em] text-slate-500',
+                'grid gap-3 rounded-soft border border-border bg-surface/80 p-3 text-[11px] uppercase tracking-[0.2em] text-muted',
                 editVatEnabled ? 'md:grid-cols-4' : 'md:grid-cols-3'
               )}
             >
               <div>
-                <p className="text-slate-400">Durée totale</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">
+                <p className="text-muted/80">Durée totale</p>
+                <p className="mt-1 text-sm font-semibold text-text">
                   {editTotals.duration ? formatDuration(editTotals.duration) : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-slate-400">Montant HT</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(editTotals.price)}</p>
+                <p className="text-muted/80">Montant HT</p>
+                <p className="mt-1 text-sm font-semibold text-text">{formatCurrency(editTotals.price)}</p>
               </div>
               {editVatEnabled && (
                 <div>
-                  <p className="text-slate-400">{vatLabel}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(editVatAmount)}</p>
+                  <p className="text-muted/80">{vatLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-text">{formatCurrency(editVatAmount)}</p>
                 </div>
               )}
               <div>
-                <label className="text-slate-400" htmlFor="edit-surcharge">
+                <label className="text-muted/80" htmlFor="edit-surcharge">
                   Majoration (TTC)
                 </label>
                 <input
@@ -3194,15 +3205,15 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         : draft
                     );
                   }}
-                  className="mt-1 w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="mt-1 w-full rounded-soft border border-border bg-surface px-3 py-2 text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-soft border border-border bg-surface px-3 py-2 text-xs text-muted">
               <div>
-                <p className="text-sm font-semibold text-slate-800">TVA pour la facture</p>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-sm font-semibold text-text">TVA pour la facture</p>
+                <p className="text-[10px] text-muted">
                   {invoiceVatOverride === null
                     ? 'Paramètre entreprise appliqué'
                     : 'Valeur personnalisée pour cette facture'}
@@ -3214,7 +3225,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   onClick={handleInvoiceVatToggle}
                   className={clsx(
                     'relative h-6 w-11 rounded-full border transition',
-                    editVatEnabled ? 'border-primary bg-primary/90' : 'border-slate-300 bg-slate-200'
+                    editVatEnabled ? 'border-primary bg-primary/90' : 'border-border bg-surface/70'
                   )}
                   aria-pressed={editVatEnabled}
                   aria-label={
@@ -3225,12 +3236,12 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 >
                   <span
                     className={clsx(
-                      'absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow transition',
+                      'absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-surface shadow transition',
                       editVatEnabled ? 'right-1' : 'left-1'
                     )}
                   />
                 </button>
-                <span className="text-[11px] font-medium text-slate-700">
+                <span className="text-[11px] font-medium text-text">
                   {editVatEnabled ? 'TVA activée' : 'TVA désactivée'}
                 </span>
               </div>
@@ -3239,18 +3250,18 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
               <button
                 type="button"
                 onClick={handleInvoiceVatReset}
-                className="text-left text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-400 transition hover:text-slate-600"
+                className="text-left text-[10px] font-semibold uppercase tracking-[0.28em] text-muted/80 transition hover:text-text"
               >
                 Revenir au paramètre entreprise
               </button>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-soft border border-border bg-surface/70 px-3 py-2 text-xs text-muted">
               <div>
                 {editSelectedOptions.length > 0 ? (
                   <p>
                     Prestations sélectionnées :{' '}
-                    <span className="font-medium text-slate-700">
+                    <span className="font-medium text-text">
                       {editSelectedOptions
                         .map(({ option, override }) => `${override.quantity.toFixed(0)} × ${option.label}`)
                         .join(' • ')}
@@ -3260,16 +3271,16 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   <p>Aucune prestation sélectionnée pour le moment.</p>
                 )}
                 {editTotals.surcharge > 0 && (
-                  <p className="mt-1 text-[10px] text-slate-500">
+                  <p className="mt-1 text-[10px] text-muted">
                     Majoration incluse : {formatCurrency(editTotals.surcharge)}
                   </p>
                 )}
               </div>
-              <div className="text-right text-slate-700">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <div className="text-right text-text">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {editVatEnabled ? 'Total TTC' : 'Total'}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(editTotalTtc)}</p>
+                <p className="mt-1 text-sm font-semibold text-text">{formatCurrency(editTotalTtc)}</p>
               </div>
             </div>
 

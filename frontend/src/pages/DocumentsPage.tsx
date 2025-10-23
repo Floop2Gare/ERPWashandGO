@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -108,6 +108,7 @@ const DocumentsPage = () => {
   const [editForm, setEditForm] = useState<FormState | null>(null);
   const [createFileInputKey, setCreateFileInputKey] = useState(0);
   const [editFileInputKey, setEditFileInputKey] = useState(0);
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
 
   const canEditDocuments = hasPermission('documents.edit');
   const canViewDocuments = hasPermission('documents.view');
@@ -146,6 +147,12 @@ const DocumentsPage = () => {
       window.open(record.url, '_blank', 'noopener');
     }
   };
+
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const updateCreateFile = (file: File) => {
     readFileAsDataUrl(file)
@@ -320,6 +327,7 @@ const DocumentsPage = () => {
     setCreateForm(EMPTY_FORM);
     setCreateFileInputKey((value) => value + 1);
     setActivePanel(null);
+    scrollToList();
   };
 
   const handleEdit = (event: FormEvent<HTMLFormElement>) => {
@@ -477,8 +485,9 @@ const DocumentsPage = () => {
         </div>
       </Card>
 
-      <Card>
-        <Table
+      <div ref={listSectionRef}>
+        <Card>
+          <Table
           columns={[
             'Document',
             'Type / Numéro',
@@ -501,8 +510,9 @@ const DocumentsPage = () => {
             }
             return undefined;
           }}
-        />
-      </Card>
+          />
+        </Card>
+      </div>
 
       {canEditDocuments && activePanel === 'create' && (
         <Card title="Nouveau document" description="Ajoutez un élément à l’archive interne." padding="lg">

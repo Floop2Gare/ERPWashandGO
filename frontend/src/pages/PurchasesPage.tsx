@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 
 import { Card } from '../components/Card';
@@ -157,6 +157,7 @@ const PurchasesPage = () => {
   );
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
 
@@ -343,6 +344,12 @@ const PurchasesPage = () => {
     setFormState(buildFormState(null, defaultCompanyId, defaultVat));
   };
 
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [defaultCompanyId, defaultVat]);
+
   const openCreate = () => {
     setActivePanel('create');
     setEditingId(null);
@@ -388,7 +395,9 @@ const PurchasesPage = () => {
     } else {
       const created = addPurchase(payload);
       setFeedback('Achat enregistré.');
-      setDetailId(created.id);
+      setDetailId(null);
+      setSelectedIds([]);
+      scrollToList();
     }
     closeForm();
   };
@@ -578,8 +587,9 @@ const PurchasesPage = () => {
         </div>
       </Card>
 
-      <Card className="shadow-none border-slate-200/80">
-        <Table
+      <div ref={listSectionRef}>
+        <Card className="shadow-none border-slate-200/80">
+          <Table
           columns={[
             <input
               key="select-all"
@@ -664,12 +674,13 @@ const PurchasesPage = () => {
             )
           }
         />
-        {!filteredPurchases.length && (
-          <p className="px-3 py-3 text-[12px] text-slate-500">
-            Aucun achat sur la période sélectionnée.
-          </p>
-        )}
-      </Card>
+          {!filteredPurchases.length && (
+            <p className="px-3 py-3 text-[12px] text-slate-500">
+              Aucun achat sur la période sélectionnée.
+            </p>
+          )}
+        </Card>
+      </div>
 
       <Card className="shadow-none border-slate-200/80">
         <div className="grid gap-4 md:grid-cols-2">
