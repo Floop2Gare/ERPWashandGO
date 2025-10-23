@@ -11,6 +11,7 @@ import { Tag } from '../components/Tag';
 import { RowActionButton } from '../components/RowActionButton';
 import {
   IconArchive,
+  IconDocument,
   IconDuplicate,
   IconEdit,
   IconPaperPlane,
@@ -34,9 +35,9 @@ import {
   DocumentRecord,
 } from '../store/useAppData';
 import { formatCurrency, formatDate, formatDuration, mergeBodyWithSignature } from '../lib/format';
-import { generateInvoicePdf } from '../lib/invoice';
+import { generateInvoicePdf, generateQuotePdf } from '../lib/invoice';
 import { BRAND_NAME } from '../lib/branding';
-import { openEmailComposer } from '../lib/email';
+import { openEmailComposer, sendDocumentEmail, SendDocumentEmailResult } from '../lib/email';
 
 type EngagementDraft = {
   clientId: string;
@@ -213,6 +214,8 @@ const buildPreviewEngagement = (draft: EngagementDraft, kind: EngagementKind): E
   sendHistory: [],
   invoiceNumber: null,
   invoiceVatEnabled: null,
+  quoteNumber: null,
+  quoteStatus: kind === 'devis' ? 'brouillon' : null,
   optionOverrides: sanitizeDraftOverrides(draft.optionIds, draft.optionOverrides),
 });
 
@@ -241,6 +244,9 @@ const getEngagementDocumentNumber = (engagement: Engagement) => {
   if (engagement.kind === 'facture') {
     return engagement.invoiceNumber ?? buildLegacyDocumentNumber(engagement.id, 'Facture');
   }
+  if (engagement.kind === 'devis') {
+    return engagement.quoteNumber ?? buildLegacyDocumentNumber(engagement.id, 'Devis');
+  }
   const type = documentTypeFromKind(engagement.kind);
   return buildLegacyDocumentNumber(engagement.id, type);
 };
@@ -254,6 +260,32 @@ const getNextInvoiceNumber = (engagementList: Engagement[], referenceDate: Date)
       return acc;
     }
     const match = invoicePattern.exec(engagement.invoiceNumber.trim());
+    if (!match) {
+      return acc;
+    }
+    const [, month, sequenceRaw] = match;
+    if (month !== monthToken) {
+      return acc;
+    }
+    const sequence = Number.parseInt(sequenceRaw, 10);
+    if (Number.isNaN(sequence)) {
+      return acc;
+    }
+    return Math.max(acc, sequence);
+  }, 0);
+  const nextSequence = (highestSequenceForMonth + 1).toString().padStart(4, '0');
+  return `${prefix}${nextSequence}`;
+};
+
+const getNextQuoteNumber = (engagementList: Engagement[], referenceDate: Date) => {
+  const monthToken = formatDateToken(referenceDate, 'yyyyMM');
+  const prefix = `DEV-${monthToken}-`;
+  const quotePattern = /^DEV-(\d{6})-(\d{4})$/;
+  const highestSequenceForMonth = engagementList.reduce((acc, engagement) => {
+    if (!engagement.quoteNumber) {
+      return acc;
+    }
+    const match = quotePattern.exec(engagement.quoteNumber.trim());
     if (!match) {
       return acc;
     }
@@ -409,32 +441,41 @@ const ServicePage = () => {
         documentType: 'Service' | 'Devis' | 'Facture';
         client?: Client | null;
         company?: Company | null;
+        totals: { subtotal: number; vatAmount: number; total: number };
+        vatEnabled: boolean;
+        vatRate: number;
+        issueDate: Date;
+        recipients?: string[];
+        pdfDataUri?: string;
       }
     ) => {
-      if (context.documentType !== 'Facture') {
+      if (context.documentType === 'Service') {
         return;
       }
       try {
-        const dataUrl = pdf.output('datauristring');
+        const dataUrl = context.pdfDataUri ?? pdf.output('datauristring');
         if (!dataUrl) {
-          console.warn('[Wash&Go] Facture générée sans contenu exploitable', {
+          console.warn('[Wash&Go] Document généré sans contenu exploitable', {
             engagementId: context.engagement.id,
             documentNumber: context.documentNumber,
+            documentType: context.documentType,
           });
           return;
         }
         const blob = pdf.output('blob');
         const ownerName = `${userProfile.firstName} ${userProfile.lastName}`.trim() || BRAND_NAME;
+        const kindTag = context.documentType === 'Facture' ? 'facture' : 'devis';
         const tags = [
-          'facture',
+          kindTag,
           `engagement:${context.engagement.id}`,
           context.client?.id ? `client:${context.client.id}` : null,
         ].filter((value): value is string => Boolean(value && value.length));
 
+        const category = context.documentType === 'Facture' ? 'Factures' : 'Devis';
         const payload = {
           title: `${context.documentNumber} — ${context.client?.name ?? 'Client non défini'}`,
-          category: 'Factures',
-          description: `Facture générée le ${formatDate(new Date().toISOString())} pour ${
+          category,
+          description: `${context.documentType} généré le ${formatDate(context.issueDate.toISOString())} pour ${
             context.client?.name ?? 'client non défini'
           }.`,
           owner: ownerName,
@@ -445,7 +486,20 @@ const ServicePage = () => {
           size: formatFileSize(blob.size),
           fileName: `${context.documentNumber}.pdf`,
           fileData: dataUrl,
-        };
+          kind: context.documentType === 'Facture' ? 'facture' : 'devis',
+          engagementId: context.engagement.id,
+          number: context.documentNumber,
+          status:
+            context.documentType === 'Facture'
+              ? (context.engagement.status === 'réalisé' ? 'payé' : 'envoyé')
+              : context.engagement.quoteStatus ?? 'brouillon',
+          totalHt: context.totals.subtotal,
+          totalTtc: context.totals.total,
+          vatAmount: context.vatEnabled ? context.totals.vatAmount : 0,
+          vatRate: context.vatEnabled ? context.vatRate : 0,
+          issueDate: context.issueDate.toISOString(),
+          recipients: context.recipients && context.recipients.length ? context.recipients : undefined,
+        } satisfies Omit<DocumentRecord, 'id' | 'updatedAt'> & { updatedAt?: string };
 
         const existing: DocumentRecord | undefined = documents.find((document) =>
           tags.every((tag) => document.tags.includes(tag))
@@ -457,10 +511,11 @@ const ServicePage = () => {
           addDocument(payload);
         }
       } catch (error) {
-        console.error('[Wash&Go] Impossible de persister la facture générée', {
+        console.error('[Wash&Go] Impossible de persister le document généré', {
           error,
           engagementId: context.engagement.id,
           documentNumber: context.documentNumber,
+          documentType: context.documentType,
         });
       }
     },
@@ -756,7 +811,7 @@ const ServicePage = () => {
       return;
     }
     targets.forEach((engagement) => {
-      handleGenerateInvoice(engagement, 'print');
+      void handleGenerateInvoice(engagement, 'print');
     });
   };
 
@@ -766,7 +821,7 @@ const ServicePage = () => {
       return;
     }
     targets.forEach((engagement) => {
-      handleGenerateInvoice(engagement, 'email');
+      void handleGenerateInvoice(engagement, 'email');
     });
   };
 
@@ -1210,7 +1265,7 @@ const ServicePage = () => {
     setCreationMode('service');
   };
 
-  const handleCreateService = (options?: { sendAsQuote?: boolean }) => {
+  const handleCreateService = async (options?: { sendAsQuote?: boolean }) => {
     setFeedback(null);
     if (!creationDraft.clientId || !creationDraft.serviceId) {
       setFeedback('Sélectionnez un client et un service.');
@@ -1254,7 +1309,7 @@ const ServicePage = () => {
       optionIds: creationDraft.optionIds,
       optionOverrides: creationDraft.optionOverrides,
       scheduledAt: fromLocalInputValue(creationDraft.scheduledAt),
-      status: options?.sendAsQuote ? 'envoyé' : creationDraft.status,
+      status: options?.sendAsQuote ? 'brouillon' : creationDraft.status,
       companyId: selectedCompany.id,
       kind: options?.sendAsQuote ? 'devis' : 'service',
       supportType: creationDraft.supportType,
@@ -1264,6 +1319,8 @@ const ServicePage = () => {
       sendHistory: [],
       invoiceNumber: null,
       invoiceVatEnabled: null,
+      quoteNumber: null,
+      quoteStatus: options?.sendAsQuote ? 'brouillon' : null,
     });
     setHighlightQuote(false);
     setIsAddingClient(false);
@@ -1271,15 +1328,14 @@ const ServicePage = () => {
     setEditDraft(buildDraftFromEngagement(engagement));
 
     if (options?.sendAsQuote) {
-      openMailForService(engagement, service.name, client);
-      setFeedback('Devis préparé. Vérifiez votre messagerie pour l’envoi.');
+      await handleGenerateQuote(engagement, 'email', { autoCreated: true });
     } else {
       setFeedback('Service enregistré.');
     }
     setCreationMode(null);
   };
 
-    const sendInvoiceEmail = ({
+  const sendInvoiceEmail = async ({
     engagement,
     client,
     company,
@@ -1290,11 +1346,18 @@ const ServicePage = () => {
     optionOverrides,
     totals,
     vatEnabled,
-  }: InvoiceEmailContext & { optionsSelected: ServiceOption[] }) => {
+    pdfDataUri,
+  }: InvoiceEmailContext & {
+    optionsSelected: ServiceOption[];
+    pdfDataUri: string;
+    totals: { price: number; duration: number; surcharge: number };
+  }): Promise<{ status: 'sent' | 'fallback' | 'error'; message?: string }> => {
     const recipients = resolveEngagementRecipients(engagement, client);
     if (!recipients.emails.length || !recipients.contactIds.length) {
-      setFeedback('Ajoutez un contact facturation avec une adresse e-mail pour envoyer la facture.');
-      return false;
+      return {
+        status: 'error',
+        message: 'Ajoutez un contact facturation avec une adresse e-mail pour envoyer la facture.',
+      };
     }
 
     const contact = client.contacts.find((item) => recipients.contactIds.includes(item.id)) ?? null;
@@ -1364,12 +1427,144 @@ const ServicePage = () => {
       bodyWithSignature = `${bodyWithSignature}\n\n${fallbackSignature}`.trim();
     }
 
-    openEmailComposer({ to: recipients.emails, subject, body: bodyWithSignature });
-    recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
-    return true;
+    const sendResult: SendDocumentEmailResult = await sendDocumentEmail({
+      to: recipients.emails,
+      subject,
+      body: bodyWithSignature,
+      attachment: { filename: `${documentNumber}.pdf`, dataUri: pdfDataUri },
+    });
+
+    if (sendResult.ok) {
+      recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
+      return { status: 'sent' };
+    }
+
+    if (sendResult.reason === 'not-configured') {
+      openEmailComposer({ to: recipients.emails, subject, body: bodyWithSignature });
+      recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
+      return { status: 'fallback', message: 'SMTP non configuré – e-mail ouvert dans votre messagerie.' };
+    }
+
+    return {
+      status: 'error',
+      message: sendResult.message ?? "Impossible d'envoyer la facture par e-mail.",
+    };
   };
 
-  const handleGenerateInvoice = (engagement: Engagement, mode: 'download' | 'email' | 'print' = 'download') => {
+  const sendQuoteEmail = async ({
+    engagement,
+    client,
+    company,
+    service,
+    documentNumber,
+    issueDate,
+    optionsSelected,
+    optionOverrides,
+    totals,
+    vatEnabled,
+    pdfDataUri,
+  }: InvoiceEmailContext & {
+    optionsSelected: ServiceOption[];
+    pdfDataUri: string;
+    totals: { price: number; duration: number; surcharge: number };
+  }): Promise<{ status: 'sent' | 'fallback' | 'error'; message?: string }> => {
+    const recipients = resolveEngagementRecipients(engagement, client);
+    if (!recipients.emails.length || !recipients.contactIds.length) {
+      return {
+        status: 'error',
+        message: 'Ajoutez un contact destinataire avec une adresse e-mail pour envoyer le devis.',
+      };
+    }
+
+    const subtotal = totals.price + totals.surcharge;
+    const vatAmount = vatEnabled ? Math.round(subtotal * vatMultiplier * 100) / 100 : 0;
+    const totalTtc = vatEnabled ? subtotal + vatAmount : subtotal;
+    const vatSuffix = vatEnabled
+      ? ` (TVA ${formatVatRateLabel(vatPercent)} % : ${formatCurrency(vatAmount)})`
+      : '';
+
+    const prestationEntries = optionsSelected.map((option) => {
+      const override = optionOverrides?.[option.id];
+      const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+      const durationValue =
+        override?.durationMin !== undefined && override.durationMin >= 0
+          ? override.durationMin
+          : option.defaultDurationMin;
+      const unitPrice =
+        override?.unitPriceHT !== undefined && override.unitPriceHT >= 0
+          ? override.unitPriceHT
+          : option.unitPriceHT;
+      const quantityLabel = quantity !== 1 ? `${quantity} × ` : '';
+      const durationLabel = durationValue ? ` (${formatDuration(durationValue)})` : '';
+      const lineTotal = formatCurrency(unitPrice * quantity);
+      return `• ${quantityLabel}${option.label}${durationLabel} – ${lineTotal}`;
+    });
+    if (totals.surcharge > 0) {
+      prestationEntries.push(`• Majoration – ${formatCurrency(totals.surcharge)}`);
+    }
+    const prestationsBlock = prestationEntries.length
+      ? `\n  ${prestationEntries.join('\n  ')}`
+      : ' Voir le détail dans le devis';
+
+    const subject = `Devis ${documentNumber} – ${client.name}`;
+    const baseBody = [
+      `Bonjour ${client.name},`,
+      '',
+      `Veuillez trouver ci-joint le devis ${documentNumber} pour le service « ${service.name} ».`,
+      '',
+      'Détails principaux :',
+      `- Client : ${client.name}`,
+      `- Support : ${
+        engagement.supportDetail?.trim()
+          ? `${engagement.supportType} – ${engagement.supportDetail}`
+          : engagement.supportType || 'Support'
+      }`,
+      `- Prestations :${prestationsBlock}`,
+      `- Total HT estimé : ${formatCurrency(subtotal)}${vatSuffix}`,
+      `- Total TTC estimé : ${formatCurrency(totalTtc)}`,
+      `- Date d’émission : ${issueDate.toLocaleDateString('fr-FR')}`,
+      '',
+      'Validité du devis : 30 jours.',
+      '',
+      'Restant à votre disposition pour toute précision,',
+    ].join('\n');
+
+    const signatureHtml = resolveSignatureHtml(company.id, currentUserId);
+    let bodyWithSignature = mergeBodyWithSignature(baseBody, signatureHtml, buildSignatureReplacements(company));
+    if (!signatureHtml) {
+      const fallbackName = `${userProfile.firstName ?? ''} ${userProfile.lastName ?? ''}`.trim() || BRAND_NAME;
+      const fallbackSignature = `Cordialement,\n${fallbackName}`;
+      bodyWithSignature = `${bodyWithSignature}\n\n${fallbackSignature}`.trim();
+    }
+
+    const sendResult: SendDocumentEmailResult = await sendDocumentEmail({
+      to: recipients.emails,
+      subject,
+      body: bodyWithSignature,
+      attachment: { filename: `${documentNumber}.pdf`, dataUri: pdfDataUri },
+    });
+
+    if (sendResult.ok) {
+      recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
+      return { status: 'sent' };
+    }
+
+    if (sendResult.reason === 'not-configured') {
+      openEmailComposer({ to: recipients.emails, subject, body: bodyWithSignature });
+      recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
+      return { status: 'fallback', message: 'SMTP non configuré – e-mail ouvert dans votre messagerie.' };
+    }
+
+    return {
+      status: 'error',
+      message: sendResult.message ?? "Impossible d'envoyer le devis par e-mail.",
+    };
+  };
+
+  const handleGenerateInvoice = async (
+    engagement: Engagement,
+    mode: 'download' | 'email' | 'print' = 'download'
+  ) => {
     setFeedback(null);
     const service = servicesById.get(engagement.serviceId) ?? null;
     if (!service) {
@@ -1433,12 +1628,25 @@ const ServicePage = () => {
         supportDetail: engagement.supportDetail,
         paymentMethod: undefined,
       });
+      const subtotal = totals.price + totals.surcharge;
+      const vatAmount = vatEnabledForInvoice ? Math.round(subtotal * vatMultiplier * 100) / 100 : 0;
+      const totalTtc = vatEnabledForInvoice ? subtotal + vatAmount : subtotal;
+      const pdfDataUri = pdf.output('datauristring');
+
+      const recipients = resolveEngagementRecipients(engagement, client);
+
       persistEngagementDocument(pdf, {
         engagement,
         documentNumber,
         documentType: 'Facture',
         client,
         company,
+        totals: { subtotal, vatAmount, total: totalTtc },
+        vatEnabled: vatEnabledForInvoice,
+        vatRate: vatPercent,
+        issueDate,
+        recipients: recipients.emails.length ? recipients.emails : undefined,
+        pdfDataUri,
       });
 
       if (mode === 'download') {
@@ -1461,7 +1669,7 @@ const ServicePage = () => {
       setEditDraft(buildDraftFromEngagement(nextEngagement));
 
       if (mode === 'email') {
-        const emailed = sendInvoiceEmail({
+        const emailResult = await sendInvoiceEmail({
           engagement: nextEngagement,
           client,
           company,
@@ -1472,11 +1680,21 @@ const ServicePage = () => {
           optionOverrides: nextEngagement.optionOverrides ?? {},
           totals,
           vatEnabled: vatEnabledForInvoice,
+          pdfDataUri,
         });
-        if (!emailed) {
+        if (emailResult.status === 'error') {
+          setFeedback(emailResult.message ?? "Impossible d'envoyer la facture par e-mail.");
           return;
         }
-        setFeedback('Facture générée et prête à l’envoi par e-mail.');
+        if (emailResult.status === 'fallback') {
+          pdf.save(`${documentNumber}.pdf`);
+          setFeedback(
+            emailResult.message ??
+              'SMTP indisponible – le PDF a été téléchargé et votre messagerie a été ouverte.'
+          );
+        } else {
+          setFeedback('Facture envoyée par e-mail.');
+        }
       } else if (mode === 'print') {
         setFeedback('Facture générée et prête pour impression.');
       } else {
@@ -1489,6 +1707,156 @@ const ServicePage = () => {
         serviceId: engagement.serviceId,
       });
       setFeedback('Impossible de générer la facture. Vérifiez les informations et réessayez.');
+    }
+  };
+
+  const handleGenerateQuote = async (
+    engagement: Engagement,
+    mode: 'download' | 'email' = 'download',
+    options?: { autoCreated?: boolean }
+  ) => {
+    setFeedback(null);
+    const service = servicesById.get(engagement.serviceId) ?? null;
+    if (!service) {
+      console.error('[Wash&Go] Service introuvable lors de la génération de devis', {
+        engagementId: engagement.id,
+        serviceId: engagement.serviceId,
+      });
+      setFeedback('Service introuvable pour cette prestation.');
+      return;
+    }
+    const client = clientsById.get(engagement.clientId) ?? null;
+    if (!client) {
+      console.error('[Wash&Go] Client introuvable lors de la génération de devis', {
+        engagementId: engagement.id,
+        clientId: engagement.clientId,
+      });
+      setFeedback('Client introuvable pour cette prestation.');
+      return;
+    }
+    const preferredCompany = engagement.companyId ? companiesById.get(engagement.companyId) ?? null : null;
+    const company = preferredCompany ?? (activeCompanyId ? companiesById.get(activeCompanyId) ?? null : null);
+    if (!company) {
+      setFeedback('Associez une entreprise avant de générer un devis.');
+      return;
+    }
+
+    const optionsSelected = service.options.filter((option) => engagement.optionIds.includes(option.id));
+    if (!optionsSelected.length && engagement.additionalCharge <= 0) {
+      setFeedback('Sélectionnez au moins une prestation à inclure dans le devis.');
+      return;
+    }
+
+    if (!company.name.trim() || !company.siret.trim()) {
+      setFeedback("Complétez le nom et le SIRET de l’entreprise avant de générer un devis.");
+      return;
+    }
+    if (!client.name.trim()) {
+      setFeedback('Le client doit avoir un nom pour générer un devis.');
+      return;
+    }
+
+    const totals = computeEngagementTotals(engagement);
+    const issueDate = new Date();
+    const vatEnabledForQuote = company.vatEnabled ?? vatEnabled;
+    const documentNumber = engagement.quoteNumber ?? getNextQuoteNumber(engagements, issueDate);
+
+    try {
+      const pdf = generateQuotePdf({
+        documentNumber,
+        issueDate,
+        serviceDate: new Date(engagement.scheduledAt),
+        company,
+        client,
+        service,
+        options: optionsSelected,
+        optionOverrides: engagement.optionOverrides ?? {},
+        additionalCharge: engagement.additionalCharge,
+        vatRate: vatPercent,
+        vatEnabled: vatEnabledForQuote,
+        status: engagement.status,
+        supportType: engagement.supportType,
+        supportDetail: engagement.supportDetail,
+        validityNote: '30 jours',
+      });
+
+      const subtotal = totals.price + totals.surcharge;
+      const vatAmount = vatEnabledForQuote ? Math.round(subtotal * vatMultiplier * 100) / 100 : 0;
+      const totalTtc = vatEnabledForQuote ? subtotal + vatAmount : subtotal;
+      const pdfDataUri = pdf.output('datauristring');
+
+      const recipients = resolveEngagementRecipients(engagement, client);
+
+      persistEngagementDocument(pdf, {
+        engagement,
+        documentNumber,
+        documentType: 'Devis',
+        client,
+        company,
+        totals: { subtotal, vatAmount, total: totalTtc },
+        vatEnabled: vatEnabledForQuote,
+        vatRate: vatPercent,
+        issueDate,
+        recipients: recipients.emails.length ? recipients.emails : undefined,
+        pdfDataUri,
+      });
+
+      if (mode === 'download') {
+        pdf.save(`${documentNumber}.pdf`);
+      }
+
+      const updated = updateEngagement(engagement.id, {
+        status: mode === 'email' ? 'envoyé' : engagement.status === 'facture' ? engagement.status : 'brouillon',
+        kind: 'devis',
+        companyId: company.id,
+        quoteNumber: documentNumber,
+        quoteStatus: mode === 'email' ? 'envoyé' : engagement.quoteStatus ?? 'brouillon',
+      });
+      const nextEngagement = updated ?? engagement;
+      setSelectedEngagementId(nextEngagement.id);
+      setEditDraft(buildDraftFromEngagement(nextEngagement));
+
+      if (mode === 'email') {
+        const emailResult = await sendQuoteEmail({
+          engagement: nextEngagement,
+          client,
+          company,
+          service,
+          documentNumber,
+          issueDate,
+          optionsSelected,
+          optionOverrides: nextEngagement.optionOverrides ?? {},
+          totals,
+          vatEnabled: vatEnabledForQuote,
+          pdfDataUri,
+        });
+
+        if (emailResult.status === 'error') {
+          setFeedback(emailResult.message ?? "Impossible d'envoyer le devis par e-mail.");
+          return;
+        }
+        if (emailResult.status === 'fallback') {
+          pdf.save(`${documentNumber}.pdf`);
+          setFeedback(
+            emailResult.message ??
+              'SMTP indisponible – le devis a été téléchargé et un brouillon d’e-mail a été ouvert.'
+          );
+        } else {
+          const successMessage = options?.autoCreated
+            ? 'Devis préparé et e-mail envoyé.'
+            : 'Devis envoyé par e-mail.';
+          setFeedback(successMessage);
+        }
+      } else {
+        setFeedback('Devis généré et téléchargé.');
+      }
+    } catch (error) {
+      console.error('[Wash&Go] Échec de génération du devis', {
+        error,
+        engagementId: engagement.id,
+        serviceId: engagement.serviceId,
+      });
+      setFeedback('Impossible de générer le devis. Vérifiez les informations et réessayez.');
     }
   };
 
@@ -1676,21 +2044,45 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             <IconDuplicate />
           </RowActionButton>
         )}
+        <RowActionButton
+          label={engagement.kind === 'devis' ? 'Télécharger devis' : 'Créer devis'}
+          onClick={() => {
+            void handleGenerateQuote(engagement);
+          }}
+        >
+          <IconDocument />
+        </RowActionButton>
         {hasPermission('service.invoice') && (
           <RowActionButton
             label={engagement.kind === 'facture' ? 'Télécharger facture' : 'Créer facture'}
-            onClick={() => handleGenerateInvoice(engagement)}
+            onClick={() => {
+              void handleGenerateInvoice(engagement);
+            }}
           >
             <IconReceipt />
           </RowActionButton>
         )}
         {hasPermission('service.print') && (
-          <RowActionButton label="Imprimer" onClick={() => handleGenerateInvoice(engagement, 'print')}>
+          <RowActionButton
+            label="Imprimer"
+            onClick={() => {
+              void handleGenerateInvoice(engagement, 'print');
+            }}
+          >
             <IconPrinter />
           </RowActionButton>
         )}
         {hasPermission('service.email') && (
-          <RowActionButton label="Envoyer" onClick={() => handleGenerateInvoice(engagement, 'email')}>
+          <RowActionButton
+            label={engagement.kind === 'devis' ? 'Envoyer devis' : 'Envoyer facture'}
+            onClick={() => {
+              if (engagement.kind === 'devis') {
+                void handleGenerateQuote(engagement, 'email');
+              } else {
+                void handleGenerateInvoice(engagement, 'email');
+              }
+            }}
+          >
             <IconPaperPlane />
           </RowActionButton>
         )}
@@ -1952,14 +2344,14 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
             }
           >
           <form
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
-              handleCreateService();
+              await handleCreateService();
             }}
-            className="space-y-6 text-sm text-slate-700"
+            className="space-y-5 text-sm text-slate-700"
           >
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-x-3 md:gap-y-2">
+              <div className="flex flex-col gap-1.5 md:col-span-6">
                 <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-client">
                   Client
                 </label>
@@ -1979,12 +2371,67 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 <button
                   type="button"
                   onClick={() => setIsAddingClient((value) => !value)}
-                  className="text-[11px] font-semibold tracking-[0.2em] text-slate-500 underline decoration-slate-300 decoration-1 underline-offset-4 hover:text-slate-800"
+                  className="self-start text-[11px] font-semibold tracking-[0.2em] text-slate-500 underline decoration-slate-300 decoration-1 underline-offset-4 hover:text-slate-800"
                 >
                   {isAddingClient ? 'Annuler l’ajout' : 'Ajouter un client'}
                 </button>
-                {isAddingClient && (
-                  <div className="grid gap-2">
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-6">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-company">
+                  Entreprise
+                </label>
+                <select
+                  id="create-company"
+                  value={creationDraft.companyId}
+                  onChange={(event) =>
+                    setCreationDraft((draft) => ({ ...draft, companyId: event.target.value as string | '' }))
+                  }
+                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="">Sélectionner…</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-6">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-status">
+                  Statut
+                </label>
+                <select
+                  id="create-status"
+                  value={creationDraft.status}
+                  onChange={(event) =>
+                    setCreationDraft((draft) => ({ ...draft, status: event.target.value as EngagementStatus }))
+                  }
+                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="brouillon">Brouillon</option>
+                  <option value="envoyé">Envoyé</option>
+                  <option value="planifié">Planifié</option>
+                  <option value="réalisé">Réalisé</option>
+                  <option value="annulé">Annulé</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-6">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-date">
+                  Date prévue
+                </label>
+                <input
+                  id="create-date"
+                  type="date"
+                  value={creationDraft.scheduledAt}
+                  onChange={(event) =>
+                    setCreationDraft((draft) => ({ ...draft, scheduledAt: event.target.value }))
+                  }
+                  className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+              {isAddingClient && (
+                <div className="md:col-span-12 rounded-soft border border-dashed border-slate-300 bg-white/80 p-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
                     <input
                       required
                       value={quickClientDraft.name}
@@ -2035,7 +2482,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       placeholder="Ville"
                       className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
-                    <div className="flex gap-3 text-[11px]">
+                    <div className="col-span-full flex flex-wrap gap-3 text-[11px]">
                       {(['Actif', 'Prospect'] as Client['status'][]).map((status) => (
                         <label key={status} className="inline-flex items-center gap-2 text-slate-500">
                           <input
@@ -2055,111 +2502,77 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                         </label>
                       ))}
                     </div>
-                    <div className="flex justify-end">
+                    <div className="col-span-full flex justify-end">
                       <Button type="button" size="xs" onClick={handleQuickClientSubmit}>
                         Enregistrer
                       </Button>
                     </div>
                   </div>
-                )}
-                <div className="space-y-2 rounded-soft border border-slate-200 bg-slate-50/80 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    Contacts destinataires
-                  </p>
-                  {creationContacts.length ? (
-                    <div className="space-y-2">
-                      {creationContacts.map((contact) => {
-                        const fullName = `${contact.firstName} ${contact.lastName}`.trim();
-                        const isChecked = creationDraft.contactIds.includes(contact.id);
-                        return (
-                          <label
-                            key={contact.id}
-                            className="flex items-start justify-between gap-3 rounded-soft border border-transparent px-2 py-1 hover:border-primary/40"
-                          >
-                            <div className="space-y-1">
-                              <p className="text-sm font-semibold text-slate-900">
-                                {fullName}
-                                {contact.isBillingDefault && (
-                                  <span className="ml-2 text-[10px] uppercase tracking-[0.2em] text-primary">
-                                    Facturation par défaut
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {contact.email} • {contact.mobile}
-                              </p>
-                              <div className="flex flex-wrap gap-1">
+                </div>
+              )}
+              <div className="md:col-span-12 rounded-soft border border-slate-200 bg-slate-50/80 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Contacts destinataires
+                </p>
+                {creationContacts.length ? (
+                  <div className="mt-2 space-y-1.5">
+                    {creationContacts.map((contact) => {
+                      const fullName = `${contact.firstName} ${contact.lastName}`.trim();
+                      const isChecked = creationDraft.contactIds.includes(contact.id);
+                      return (
+                        <label
+                          key={contact.id}
+                          className="flex items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-600 transition hover:border-primary/40"
+                        >
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-semibold text-slate-800">
+                              {fullName || contact.email}
+                            </span>
+                            {contact.isBillingDefault && (
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-primary">
+                                Facturation par défaut
+                              </span>
+                            )}
+                            {contact.roles.length > 0 && (
+                              <span className="flex flex-wrap gap-1 text-[11px] text-slate-500">
                                 {contact.roles.map((role) => (
                                   <Tag key={`${contact.id}-${role}`}>{role}</Tag>
                                 ))}
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => toggleCreationContact(contact.id)}
-                                className="accent-primary"
-                              />
-                              {!contact.isBillingDefault && (
-                                <button
-                                  type="button"
-                                  onClick={() => setClientBillingContact(creationDraft.clientId, contact.id)}
-                                  className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 hover:text-primary"
-                                >
-                                  Défaut facturation
-                                </button>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Ajoutez un contact sur la fiche client pour sélectionner les destinataires.
-                    </p>
-                  )}
-                </div>
+                              </span>
+                            )}
+                            <span className="text-[12px] text-slate-500">
+                              {contact.email} {contact.mobile ? `• ${contact.mobile}` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {!contact.isBillingDefault && (
+                              <button
+                                type="button"
+                                onClick={() => setClientBillingContact(creationDraft.clientId, contact.id)}
+                                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 hover:text-primary"
+                              >
+                                Défaut
+                              </button>
+                            )}
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleCreationContact(contact.id)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Ajoutez un contact sur la fiche client pour sélectionner les destinataires.
+                  </p>
+                )}
               </div>
-
-              <div className="space-y-3">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-company">
-                  Entreprise
-                </label>
-                <select
-                  id="create-company"
-                  value={creationDraft.companyId}
-                  onChange={(event) =>
-                    setCreationDraft((draft) => ({ ...draft, companyId: event.target.value as string | '' }))
-                  }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="">Sélectionner…</option>
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-date">
-                  Date prévue
-                </label>
-                <input
-                  id="create-date"
-                  type="date"
-                  value={creationDraft.scheduledAt}
-                  onChange={(event) =>
-                    setCreationDraft((draft) => ({ ...draft, scheduledAt: event.target.value }))
-                  }
-                  className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+              <div className="md:col-span-12 flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
                   Support
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -2169,7 +2582,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       type="button"
                       onClick={() => setCreationDraft((draft) => ({ ...draft, supportType: type }))}
                       className={clsx(
-                        'rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition',
+                        'rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition',
                         creationDraft.supportType === type
                           ? 'border-slate-600 text-slate-900'
                           : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
@@ -2188,9 +2601,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
-
-              <div className="space-y-3">
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-service">
+              <div className="md:col-span-12 flex flex-col gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="create-service">
                   Service
                 </label>
                 <select
@@ -2213,103 +2625,118 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     </option>
                   ))}
                 </select>
-                <div className="space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+              </div>
+              <div className="md:col-span-12 space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Prestations</p>
-                  {creationSelectedService ? (
-                    creationSelectedService.options.map((option) => {
-                      const selected = creationDraft.optionIds.includes(option.id);
-                      const override = resolveOptionOverride(option, creationDraft.optionOverrides[option.id]);
-                      return (
-                        <div
-                          key={option.id}
-                          className={clsx(
-                            'rounded border px-3 py-2 transition',
-                            selected
-                              ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
-                              : 'border-slate-200 bg-white/70 text-slate-600'
-                          )}
-                        >
-                          <label className="flex items-center justify-between gap-3 text-xs font-medium">
-                            <span className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={() => toggleCreationOption(option.id)}
-                                className="h-3.5 w-3.5 accent-primary"
-                              />
-                              <span className="text-slate-800">{option.label}</span>
-                            </span>
-                            <span className="text-[11px] text-slate-500">
-                              {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
-                            </span>
-                          </label>
-                          {option.description && (
-                            <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
-                          )}
-                          {selected && (
-                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                              <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                  Quantité
-                                </span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  step="1"
-                                  value={override.quantity}
-                                  onChange={(event) =>
-                                    updateCreationOverride(option.id, {
-                                      quantity: Number.parseFloat(event.target.value) || 1,
-                                    })
-                                  }
-                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                  Durée (min)
-                                </span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="5"
-                                  value={override.durationMin}
-                                  onChange={(event) =>
-                                    updateCreationOverride(option.id, {
-                                      durationMin: Number.parseFloat(event.target.value) || 0,
-                                    })
-                                  }
-                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                  Prix HT (€)
-                                </span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.5"
-                                  value={override.unitPriceHT}
-                                  onChange={(event) =>
-                                    updateCreationOverride(option.id, {
-                                      unitPriceHT: Number.parseFloat(event.target.value) || 0,
-                                    })
-                                  }
-                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-[11px] text-slate-400">Sélectionnez un service pour afficher les prestations.</p>
-                  )}
+                  <div className="text-right text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    <p>Durée estimée</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {creationTotals.duration ? formatDuration(creationTotals.duration) : '—'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {creationVatEnabled
+                        ? `${formatCurrency(creationTotals.price)} HT · ${formatCurrency(creationTotalTtc)} TTC`
+                        : `${formatCurrency(creationTotals.price)} HT`}
+                    </p>
+                  </div>
                 </div>
+                {creationSelectedService ? (
+                  creationSelectedService.options.map((option) => {
+                    const selected = creationDraft.optionIds.includes(option.id);
+                    const override = resolveOptionOverride(option, creationDraft.optionOverrides[option.id]);
+                    return (
+                      <div
+                        key={option.id}
+                        className={clsx(
+                          'rounded border px-3 py-2 transition',
+                          selected
+                            ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
+                            : 'border-slate-200 bg-white/70 text-slate-600'
+                        )}
+                      >
+                        <label className="flex items-center justify-between gap-3 text-xs font-medium">
+                          <span className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleCreationOption(option.id)}
+                              className="h-3.5 w-3.5 accent-primary"
+                            />
+                            <span className="text-slate-800">{option.label}</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
+                          </span>
+                        </label>
+                        {option.description && (
+                          <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
+                        )}
+                        {selected && (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Quantité
+                              </span>
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={override.quantity}
+                                onChange={(event) =>
+                                  updateCreationOverride(option.id, {
+                                    quantity: Number.parseFloat(event.target.value) || 1,
+                                  })
+                                }
+                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Durée (min)
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="5"
+                                value={override.durationMin}
+                                onChange={(event) =>
+                                  updateCreationOverride(option.id, {
+                                    durationMin: Number.parseFloat(event.target.value) || 0,
+                                  })
+                                }
+                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Prix HT (€)
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={override.unitPriceHT}
+                                onChange={(event) =>
+                                  updateCreationOverride(option.id, {
+                                    unitPriceHT: Number.parseFloat(event.target.value) || 0,
+                                  })
+                                }
+                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-[11px] text-slate-400">Sélectionnez un service pour afficher les prestations.</p>
+                )}
               </div>
             </div>
+
+
 
             <div
               className={clsx(
@@ -2395,7 +2822,33 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => handleCreateService({ sendAsQuote: true })}
+                onClick={() => {
+                  if (selectedEngagement) {
+                    void handleGenerateQuote(selectedEngagement);
+                  }
+                }}
+              >
+                {selectedEngagement.kind === 'devis' ? 'Télécharger le devis' : 'Créer un devis'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (selectedEngagement) {
+                    void handleGenerateQuote(selectedEngagement, 'email');
+                  }
+                }}
+              >
+                {selectedEngagement.kind === 'devis' ? 'Envoyer le devis' : 'Créer et envoyer un devis'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void handleCreateService({ sendAsQuote: true });
+                }}
               >
                 Créer et envoyer un devis
               </Button>
@@ -2427,9 +2880,9 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
               </button>
             }
           >
-          <form onSubmit={handleEditSubmit} className="space-y-6 text-sm text-slate-700">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
+          <form onSubmit={handleEditSubmit} className="space-y-5 text-sm text-slate-700">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-x-3 md:gap-y-2">
+              <div className="flex flex-col gap-1.5 md:col-span-6">
                 <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-client">
                   Client
                 </label>
@@ -2446,85 +2899,8 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     </option>
                   ))}
                 </select>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-status">
-                  Statut
-                </label>
-                <select
-                  id="edit-status"
-                  value={editDraft.status}
-                  onChange={(event) =>
-                    setEditDraft((draft) => (draft ? { ...draft, status: event.target.value as EngagementStatus } : draft))
-                  }
-                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="brouillon">Brouillon</option>
-                  <option value="envoyé">Envoyé</option>
-                  <option value="planifié">Planifié</option>
-                  <option value="réalisé">Réalisé</option>
-                  <option value="annulé">Annulé</option>
-                </select>
-                <div className="space-y-2 rounded-soft border border-slate-200 bg-slate-50/80 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    Contacts destinataires
-                  </p>
-                  {editContacts.length ? (
-                    <div className="space-y-2">
-                      {editContacts.map((contact) => {
-                        const fullName = `${contact.firstName} ${contact.lastName}`.trim();
-                        const isChecked = editDraft.contactIds.includes(contact.id);
-                        return (
-                          <label
-                            key={contact.id}
-                            className="flex items-start justify-between gap-3 rounded-soft border border-transparent px-2 py-1 hover:border-primary/40"
-                          >
-                            <div className="space-y-1">
-                              <p className="text-sm font-semibold text-slate-900">
-                                {fullName}
-                                {contact.isBillingDefault && (
-                                  <span className="ml-2 text-[10px] uppercase tracking-[0.2em] text-primary">
-                                    Facturation par défaut
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {contact.email} • {contact.mobile}
-                              </p>
-                              <div className="flex flex-wrap gap-1">
-                                {contact.roles.map((role) => (
-                                  <Tag key={`${contact.id}-${role}`}>{role}</Tag>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => toggleEditContact(contact.id)}
-                                className="accent-primary"
-                              />
-                              {!contact.isBillingDefault && (
-                                <button
-                                  type="button"
-                                  onClick={() => setClientBillingContact(editDraft.clientId, contact.id)}
-                                  className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 hover:text-primary"
-                                >
-                                  Défaut facturation
-                                </button>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Aucun contact actif pour cette organisation.
-                    </p>
-                  )}
-                </div>
               </div>
-
-              <div className="space-y-3">
+              <div className="flex flex-col gap-1.5 md:col-span-6">
                 <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-company">
                   Entreprise
                 </label>
@@ -2543,7 +2919,28 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     </option>
                   ))}
                 </select>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-date">
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-6">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-status">
+                  Statut
+                </label>
+                <select
+                  id="edit-status"
+                  value={editDraft.status}
+                  onChange={(event) =>
+                    setEditDraft((draft) => (draft ? { ...draft, status: event.target.value as EngagementStatus } : draft))
+                  }
+                  className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="brouillon">Brouillon</option>
+                  <option value="envoyé">Envoyé</option>
+                  <option value="planifié">Planifié</option>
+                  <option value="réalisé">Réalisé</option>
+                  <option value="annulé">Annulé</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-6">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-date">
                   Date prévue
                 </label>
                 <input
@@ -2554,11 +2951,65 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+              <div className="md:col-span-12 rounded-soft border border-slate-200 bg-slate-50/80 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Contacts destinataires
+                </p>
+                {editContacts.length ? (
+                  <div className="mt-2 space-y-1.5">
+                    {editContacts.map((contact) => {
+                      const fullName = `${contact.firstName} ${contact.lastName}`.trim();
+                      const isChecked = editDraft.contactIds.includes(contact.id);
+                      return (
+                        <label
+                          key={contact.id}
+                          className="flex items-center justify-between gap-3 rounded-soft border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-600 transition hover:border-primary/40"
+                        >
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-semibold text-slate-800">{fullName || contact.email}</span>
+                            {contact.isBillingDefault && (
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-primary">Facturation par défaut</span>
+                            )}
+                            {contact.roles.length > 0 && (
+                              <span className="flex flex-wrap gap-1 text-[11px] text-slate-500">
+                                {contact.roles.map((role) => (
+                                  <Tag key={`${contact.id}-${role}`}>{role}</Tag>
+                                ))}
+                              </span>
+                            )}
+                            <span className="text-[12px] text-slate-500">
+                              {contact.email} {contact.mobile ? `• ${contact.mobile}` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {!contact.isBillingDefault && (
+                              <button
+                                type="button"
+                                onClick={() => setClientBillingContact(editDraft.clientId, contact.id)}
+                                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 hover:text-primary"
+                              >
+                                Défaut
+                              </button>
+                            )}
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleEditContact(contact.id)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Aucun contact actif pour cette organisation.
+                  </p>
+                )}
+              </div>
+              <div className="md:col-span-12 flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
                   Support
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -2568,7 +3019,7 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                       type="button"
                       onClick={() => setEditDraft((draft) => (draft ? { ...draft, supportType: type } : draft))}
                       className={clsx(
-                        'rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition',
+                        'rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition',
                         editDraft.supportType === type
                           ? 'border-slate-600 text-slate-900'
                           : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
@@ -2585,25 +3036,24 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                   className="w-full rounded-soft border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
-
-              <div className="space-y-3">
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-service">
+              <div className="md:col-span-12 flex flex-col gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400" htmlFor="edit-service">
                   Service
                 </label>
                 <select
                   id="edit-service"
                   value={editDraft.serviceId}
                   onChange={(event) =>
-                          setEditDraft((draft) =>
-                            draft
-                              ? {
-                                  ...draft,
-                                  serviceId: event.target.value,
-                                  optionIds: [],
-                                  optionOverrides: {},
-                                }
-                              : draft
-                          )
+                    setEditDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            serviceId: event.target.value,
+                            optionIds: [],
+                            optionOverrides: {},
+                          }
+                        : draft
+                    )
                   }
                   className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
@@ -2614,106 +3064,118 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                     </option>
                   ))}
                 </select>
-                <div className="space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+              </div>
+              <div className="md:col-span-12 space-y-3 rounded-soft border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Prestations</p>
-                  {editSelectedService ? (
-                    editSelectedService.options.map((option) => {
-                      const selected = editDraft.optionIds.includes(option.id);
-                      const override = resolveOptionOverride(
-                        option,
-                        editDraft.optionOverrides?.[option.id]
-                      );
-                      return (
-                        <div
-                          key={option.id}
-                          className={clsx(
-                            'rounded border px-3 py-2 transition',
-                            selected
-                              ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
-                              : 'border-slate-200 bg-white/70 text-slate-600'
-                          )}
-                        >
-                          <label className="flex items-center justify-between gap-3 text-xs font-medium">
-                            <span className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={() => toggleEditOption(option.id)}
-                                className="h-3.5 w-3.5 accent-primary"
-                              />
-                              <span className="text-slate-800">{option.label}</span>
-                            </span>
-                            <span className="text-[11px] text-slate-500">
-                              {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
-                            </span>
-                          </label>
-                          {option.description && (
-                            <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
-                          )}
-                          {selected && (
-                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                              <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                  Quantité
-                                </span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  step="1"
-                                  value={override.quantity}
-                                  onChange={(event) =>
-                                    updateEditOverride(option.id, {
-                                      quantity: Number.parseFloat(event.target.value) || 1,
-                                    })
-                                  }
-                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                  Durée (min)
-                                </span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="5"
-                                  value={override.durationMin}
-                                  onChange={(event) =>
-                                    updateEditOverride(option.id, {
-                                      durationMin: Number.parseFloat(event.target.value) || 0,
-                                    })
-                                  }
-                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                  Prix HT (€)
-                                </span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.5"
-                                  value={override.unitPriceHT}
-                                  onChange={(event) =>
-                                    updateEditOverride(option.id, {
-                                      unitPriceHT: Number.parseFloat(event.target.value) || 0,
-                                    })
-                                  }
-                                  className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-[11px] text-slate-400">Choisissez un service pour afficher les prestations.</p>
-                  )}
+                  <div className="text-right text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    <p>Durée estimée</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {editTotals.duration ? formatDuration(editTotals.duration) : '—'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {editVatEnabled
+                        ? `${formatCurrency(editTotals.price)} HT · ${formatCurrency(editTotalTtc)}`
+                        : `${formatCurrency(editTotals.price)} HT`}
+                    </p>
+                  </div>
                 </div>
+                {editSelectedService ? (
+                  editSelectedService.options.map((option) => {
+                    const selected = editDraft.optionIds.includes(option.id);
+                    const override = resolveOptionOverride(option, editDraft.optionOverrides?.[option.id]);
+                    return (
+                      <div
+                        key={option.id}
+                        className={clsx(
+                          'rounded border px-3 py-2 transition',
+                          selected
+                            ? 'border-primary/40 bg-white text-slate-700 shadow-sm'
+                            : 'border-slate-200 bg-white/70 text-slate-600'
+                        )}
+                      >
+                        <label className="flex items-center justify-between gap-3 text-xs font-medium">
+                          <span className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleEditOption(option.id)}
+                              className="h-3.5 w-3.5 accent-primary"
+                            />
+                            <span className="text-slate-800">{option.label}</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            {formatCurrency(option.unitPriceHT)} HT · {formatDuration(option.defaultDurationMin)}
+                          </span>
+                        </label>
+                        {option.description && (
+                          <p className="ml-6 mt-1 text-[11px] text-slate-500">{option.description}</p>
+                        )}
+                        {selected && (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Quantité
+                              </span>
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={override.quantity}
+                                onChange={(event) =>
+                                  updateEditOverride(option.id, {
+                                    quantity: Number.parseFloat(event.target.value) || 1,
+                                  })
+                                }
+                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Durée (min)
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="5"
+                                value={override.durationMin}
+                                onChange={(event) =>
+                                  updateEditOverride(option.id, {
+                                    durationMin: Number.parseFloat(event.target.value) || 0,
+                                  })
+                                }
+                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Prix HT (€)
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={override.unitPriceHT}
+                                onChange={(event) =>
+                                  updateEditOverride(option.id, {
+                                    unitPriceHT: Number.parseFloat(event.target.value) || 0,
+                                  })
+                                }
+                                className="rounded-soft border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-[11px] text-slate-400">Choisissez un service pour afficher les prestations.</p>
+                )}
               </div>
             </div>
+
+
 
             <div
               className={clsx(
@@ -2842,7 +3304,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => handleGenerateInvoice(selectedEngagement)}
+                onClick={() => {
+                  if (selectedEngagement) {
+                    void handleGenerateInvoice(selectedEngagement);
+                  }
+                }}
               >
                 {selectedEngagement.kind === 'facture' ? 'Télécharger la facture' : 'Créer la facture'}
               </Button>
@@ -2850,7 +3316,11 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleGenerateInvoice(selectedEngagement, 'email')}
+                onClick={() => {
+                  if (selectedEngagement) {
+                    void handleGenerateInvoice(selectedEngagement, 'email');
+                  }
+                }}
               >
                 {selectedEngagement.kind === 'facture' ? 'Envoyer la facture' : 'Créer et envoyer la facture'}
               </Button>
