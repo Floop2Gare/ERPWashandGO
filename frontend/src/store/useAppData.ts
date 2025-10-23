@@ -112,6 +112,8 @@ export type Engagement = {
   quoteNumber: string | null;
   quoteStatus: CommercialDocumentStatus | null;
   optionOverrides?: Record<string, EngagementOptionOverride>;
+  mobileDurationMinutes?: number | null;
+  mobileCompletionComment?: string | null;
 };
 
 export type Note = {
@@ -1541,6 +1543,8 @@ const initialEngagements: Engagement[] = [
     invoiceVatEnabled: null,
     quoteNumber: null,
     quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e2',
@@ -1560,6 +1564,8 @@ const initialEngagements: Engagement[] = [
     invoiceVatEnabled: null,
     quoteNumber: 'DEV-202404-0001',
     quoteStatus: 'envoyé',
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e3',
@@ -1579,6 +1585,8 @@ const initialEngagements: Engagement[] = [
     invoiceVatEnabled: true,
     quoteNumber: null,
     quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e4',
@@ -1598,6 +1606,8 @@ const initialEngagements: Engagement[] = [
     invoiceVatEnabled: null,
     quoteNumber: null,
     quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e5',
@@ -1617,6 +1627,8 @@ const initialEngagements: Engagement[] = [
     invoiceVatEnabled: null,
     quoteNumber: null,
     quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
 ];
 
@@ -2558,6 +2570,14 @@ export const useAppData = create<AppState>((set, get) => ({
           : payload.kind === 'devis'
           ? 'brouillon'
           : null,
+      mobileDurationMinutes:
+        Object.prototype.hasOwnProperty.call(payload, 'mobileDurationMinutes')
+          ? payload.mobileDurationMinutes ?? null
+          : null,
+      mobileCompletionComment:
+        Object.prototype.hasOwnProperty.call(payload, 'mobileCompletionComment')
+          ? payload.mobileCompletionComment ?? null
+          : null,
       id: `e${Date.now()}`,
     };
     set((state) => {
@@ -2589,6 +2609,14 @@ export const useAppData = create<AppState>((set, get) => ({
           sendHistory: updates.sendHistory ? [...updates.sendHistory] : engagement.sendHistory,
           quoteNumber: updates.quoteNumber !== undefined ? updates.quoteNumber : engagement.quoteNumber,
           quoteStatus: updates.quoteStatus !== undefined ? updates.quoteStatus : engagement.quoteStatus,
+          mobileDurationMinutes:
+            updates.mobileDurationMinutes !== undefined
+              ? updates.mobileDurationMinutes
+              : engagement.mobileDurationMinutes ?? null,
+          mobileCompletionComment:
+            updates.mobileCompletionComment !== undefined
+              ? updates.mobileCompletionComment
+              : engagement.mobileCompletionComment ?? null,
         };
         updated = next;
         return next;

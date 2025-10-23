@@ -1,63 +1,1083 @@
 import './mobile.css';
-import { useMemo } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { format as formatDateFn } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-const detectTouchSupport = () =>
-  typeof window !== 'undefined' &&
-  ('ontouchstart' in window ||
-    (navigator as any).maxTouchPoints > 0 ||
-    (navigator as any).msMaxTouchPoints > 0);
+import {
+  useAppData,
+  type Client,
+  type ClientContact,
+  type Engagement,
+  type Service,
+  type ServiceOption,
+  type SupportType,
+} from '../store/useAppData';
+import { formatCurrency, formatDate, formatDateTime, formatDuration } from '../lib/format';
+import { generateInvoicePdf } from '../lib/invoice';
 
-const MobileTestPage = () => {
-  const isTouchDevice = useMemo(() => detectTouchSupport(), []);
-  const currentYear = new Date().getFullYear();
+const TIMER_STORAGE_KEY = 'washandgo-mobile-timer-state';
+
+type MobileView = 'services' | 'create' | 'details' | 'timer' | 'invoice';
+
+type TimerState = {
+  engagementId: string;
+  startedAt: number | null;
+  elapsedBeforeMs: number;
+  running: boolean;
+};
+
+const supportTypes: SupportType[] = ['Voiture', 'Canapé', 'Textile'];
+
+const toClock = (elapsedMs: number) => {
+  const safe = Math.max(0, Math.floor(elapsedMs / 1000));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  const formatPart = (value: number) => value.toString().padStart(2, '0');
+  return `${formatPart(hours)}:${formatPart(minutes)}:${formatPart(seconds)}`;
+};
+
+const getDefaultOptionIds = (service: Service | undefined) =>
+  service ? service.options.filter((option) => option.active).map((option) => option.id) : [];
+
+const unique = <T,>(values: T[]) => Array.from(new Set(values));
+
+const safeVatRate = (value: number) => (Number.isFinite(value) ? Math.max(0, value) : 0);
+
+const getNextInvoiceNumber = (engagements: Engagement[], referenceDate: Date) => {
+  const monthToken = formatDateFn(referenceDate, 'yyyyMM');
+  const prefix = `FAC-${monthToken}-`;
+  const invoicePattern = /^FAC-(\d{6})-(\d{4})$/;
+  const highestSequence = engagements.reduce((acc, engagement) => {
+    if (!engagement.invoiceNumber) {
+      return acc;
+    }
+    const match = invoicePattern.exec(engagement.invoiceNumber.trim());
+    if (!match) {
+      return acc;
+    }
+    const [, month, sequenceRaw] = match;
+    if (month !== monthToken) {
+      return acc;
+    }
+    const sequence = Number.parseInt(sequenceRaw, 10);
+    if (Number.isNaN(sequence)) {
+      return acc;
+    }
+    return Math.max(acc, sequence);
+  }, 0);
+  const nextSequence = (highestSequence + 1).toString().padStart(4, '0');
+  return `${prefix}${nextSequence}`;
+};
+
+const formatFileSize = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '';
+  }
+  if (bytes < 1024) {
+    return `${bytes} o`;
+  }
+  const kiloBytes = bytes / 1024;
+  if (kiloBytes < 1024) {
+    return `${kiloBytes < 10 ? kiloBytes.toFixed(1) : Math.round(kiloBytes)} Ko`;
+  }
+  const megaBytes = kiloBytes / 1024;
+  if (megaBytes < 1024) {
+    return `${megaBytes < 10 ? megaBytes.toFixed(1) : Math.round(megaBytes)} Mo`;
+  }
+  const gigaBytes = megaBytes / 1024;
+  return `${gigaBytes < 10 ? gigaBytes.toFixed(1) : Math.round(gigaBytes)} Go`;
+};
+
+const resolveDefaultContacts = (client: Client) => {
+  const preferred = client.contacts.filter((contact) => contact.active && contact.isBillingDefault);
+  if (preferred.length) {
+    return unique(preferred.map((contact) => contact.id));
+  }
+  const active = client.contacts.filter((contact) => contact.active);
+  if (active.length) {
+    return unique(active.map((contact) => contact.id));
+  }
+  return [];
+};
+
+const formatListDate = (isoDate: string) => {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Date inconnue';
+  }
+  return formatDateFn(parsed, 'd MMM yyyy', { locale: fr });
+};
+
+const isValidEmail = (value: string) =>
+  /^(?:[\w.!#$%&'*+/=?^`{|}~-]+@(?:[\w-]+\.)+[\w-]{2,})$/.test(value.trim());
+
+const MobileLoginView = ({ onLogin }: { onLogin: (username: string, password: string) => boolean }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const success = onLogin(username, password);
+    if (!success) {
+      setError('Identifiants invalides.');
+      return;
+    }
+    setError(null);
+  };
 
   return (
-    <div className="mobile-shell">
-      <header className="mobile-shell__header">
-        <div className="mobile-shell__brand">
-          <div className="mobile-shell__logo" aria-hidden="true">
+    <div className="mobile-app mobile-app--auth">
+      <header className="mobile-app__header">
+        <div className="mobile-app__brand">
+          <div className="mobile-app__logo" aria-hidden="true">
             WG
           </div>
-          <div className="mobile-shell__titles">
-            <p className="mobile-shell__product">Wash&Go</p>
-            <p className="mobile-shell__tagline">Interface mobile test</p>
+          <div>
+            <p className="mobile-app__product">Wash&amp;Go</p>
+            <p className="mobile-app__subtitle">Interface mobile</p>
           </div>
         </div>
       </header>
-      <main className="mobile-shell__main" role="main">
-        <section className="mobile-shell__card">
-          <h1>Bienvenue sur la version mobile en bêta</h1>
-          <p>
-            Cette page est un aperçu de la future expérience mobile. Toutes les
-            fonctionnalités principales restent disponibles sur la version
-            bureau.
+      <main className="mobile-app__main mobile-app__main--center">
+        <form className="mobile-card mobile-card--auth" onSubmit={handleSubmit}>
+          <h1>Connexion</h1>
+          <label className="mobile-field">
+            <span>Identifiant</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              required
+            />
+          </label>
+          <label className="mobile-field">
+            <span>Mot de passe</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          {error ? <p className="mobile-feedback mobile-feedback--error">{error}</p> : null}
+          <button type="submit" className="mobile-button mobile-button--primary">
+            Se connecter
+          </button>
+        </form>
+      </main>
+      <footer className="mobile-app__footer">© {new Date().getFullYear()} Wash&amp;Go</footer>
+    </div>
+  );
+};
+
+const MobileTestPage = () => {
+  const {
+    currentUserId,
+    login,
+    logout,
+    userProfile,
+    engagements,
+    clients,
+    services,
+    companies,
+    activeCompanyId,
+    addEngagement,
+    updateEngagement,
+    computeEngagementTotals,
+    vatEnabled,
+    vatRate,
+    documents,
+    addDocument,
+    updateDocument,
+  } = useAppData();
+
+  const [view, setView] = useState<MobileView>('services');
+  const [selectedEngagementId, setSelectedEngagementId] = useState<string | null>(null);
+  const [createClientId, setCreateClientId] = useState('');
+  const [createServiceId, setCreateServiceId] = useState('');
+  const [createOptionIds, setCreateOptionIds] = useState<string[]>([]);
+  const [createSupportType, setCreateSupportType] = useState<SupportType>('Voiture');
+  const [createSupportDetail, setCreateSupportDetail] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreatingService, setIsCreatingService] = useState(false);
+
+  const [timerState, setTimerState] = useState<TimerState | null>(null);
+  const [displayElapsed, setDisplayElapsed] = useState(0);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [showCommentForm, setShowCommentForm] = useState(false);
+
+  const [invoiceContactIds, setInvoiceContactIds] = useState<string[]>([]);
+  const [invoiceEmail, setInvoiceEmail] = useState('');
+  const [invoiceFeedback, setInvoiceFeedback] = useState<string | null>(null);
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+
+  const clientsById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+  const servicesById = useMemo(() => new Map(services.map((service) => [service.id, service])), [services]);
+  const documentsByEngagementNumber = useMemo(() => {
+    const index = new Map<string, string>();
+    documents.forEach((document) => {
+      if (document.engagementId && document.number) {
+        index.set(`${document.engagementId}:${document.number}`, document.id);
+      }
+    });
+    return index;
+  }, [documents]);
+
+  const serviceEngagements = useMemo(
+    () =>
+      engagements
+        .filter((engagement) => engagement.kind === 'service')
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
+    [engagements]
+  );
+
+  const selectedEngagement = selectedEngagementId
+    ? engagements.find((engagement) => engagement.id === selectedEngagementId) ?? null
+    : null;
+
+  useEffect(() => {
+    if (!currentUserId || typeof window === 'undefined') {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(TIMER_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<TimerState> | null;
+      if (!parsed || typeof parsed.engagementId !== 'string') {
+        return;
+      }
+      const restored: TimerState = {
+        engagementId: parsed.engagementId,
+        startedAt: typeof parsed.startedAt === 'number' ? parsed.startedAt : null,
+        elapsedBeforeMs: typeof parsed.elapsedBeforeMs === 'number' ? parsed.elapsedBeforeMs : 0,
+        running: Boolean(parsed.running),
+      };
+      setTimerState(restored);
+      setSelectedEngagementId(restored.engagementId);
+      setView('timer');
+    } catch (error) {
+      console.warn('[Wash&Go] Impossible de restaurer le minuteur mobile', error);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (!timerState) {
+      window.localStorage.removeItem(TIMER_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(timerState));
+  }, [timerState]);
+
+  useEffect(() => {
+    if (!timerState) {
+      setDisplayElapsed(0);
+      return;
+    }
+    const update = () => {
+      const base = timerState.elapsedBeforeMs;
+      const runningContribution = timerState.running && timerState.startedAt ? Date.now() - timerState.startedAt : 0;
+      setDisplayElapsed(base + runningContribution);
+    };
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [timerState]);
+
+  useEffect(() => {
+    if (view !== 'create') {
+      return;
+    }
+    const firstClient = clients[0]?.id ?? '';
+    const firstService = services[0]?.id ?? '';
+    setCreateClientId(firstClient);
+    setCreateServiceId(firstService);
+    setCreateOptionIds(getDefaultOptionIds(servicesById.get(firstService)));
+    setCreateSupportType('Voiture');
+    setCreateSupportDetail('');
+    setCreateError(null);
+  }, [clients, services, servicesById, view]);
+
+  useEffect(() => {
+    if (view !== 'invoice' || !selectedEngagement) {
+      return;
+    }
+    const client = clientsById.get(selectedEngagement.clientId);
+    if (!client) {
+      setInvoiceContactIds([]);
+      setInvoiceEmail('');
+      return;
+    }
+    const defaults = selectedEngagement.contactIds.length
+      ? selectedEngagement.contactIds
+      : resolveDefaultContacts(client);
+    setInvoiceContactIds(unique(defaults));
+    setInvoiceEmail(client.email ?? '');
+    setInvoiceFeedback(null);
+  }, [clientsById, selectedEngagement, view]);
+
+  const handleLogin = (username: string, password: string) => login(username, password);
+
+  const handleStartTimer = (engagement: Engagement) => {
+    setTimerState({
+      engagementId: engagement.id,
+      startedAt: Date.now(),
+      elapsedBeforeMs: engagement.mobileDurationMinutes ? engagement.mobileDurationMinutes * 60000 : 0,
+      running: true,
+    });
+    setShowCommentForm(false);
+    setCommentDraft('');
+    setView('timer');
+  };
+
+  const handlePauseTimer = () => {
+    if (!timerState || !timerState.running || !timerState.startedAt) {
+      return;
+    }
+    const now = Date.now();
+    const accumulated = timerState.elapsedBeforeMs + (now - timerState.startedAt);
+    setTimerState({
+      engagementId: timerState.engagementId,
+      startedAt: null,
+      elapsedBeforeMs: accumulated,
+      running: false,
+    });
+  };
+
+  const handleResumeTimer = () => {
+    if (!timerState || timerState.running) {
+      return;
+    }
+    setTimerState({
+      engagementId: timerState.engagementId,
+      startedAt: Date.now(),
+      elapsedBeforeMs: timerState.elapsedBeforeMs,
+      running: true,
+    });
+  };
+
+  const clearTimer = () => {
+    setTimerState(null);
+    setDisplayElapsed(0);
+    setShowCommentForm(false);
+    setCommentDraft('');
+  };
+
+  const handleCompleteTimer = () => {
+    if (!timerState) {
+      return;
+    }
+    const totalMs =
+      timerState.elapsedBeforeMs + (timerState.running && timerState.startedAt ? Date.now() - timerState.startedAt : 0);
+    setTimerState({
+      engagementId: timerState.engagementId,
+      startedAt: null,
+      elapsedBeforeMs: totalMs,
+      running: false,
+    });
+    setShowCommentForm(true);
+  };
+
+  const handleValidateTimer = (engagement: Engagement) => {
+    if (!timerState) {
+      return;
+    }
+    const totalMs = timerState.elapsedBeforeMs + (timerState.running && timerState.startedAt ? Date.now() - timerState.startedAt : 0);
+    const minutes = Math.max(1, Math.round(totalMs / 60000));
+    const comment = commentDraft.trim();
+    updateEngagement(engagement.id, {
+      status: 'réalisé',
+      mobileDurationMinutes: minutes,
+      mobileCompletionComment: comment.length ? comment : null,
+    });
+    clearTimer();
+    setView('details');
+  };
+
+  const handleExitTimerView = () => {
+    setShowCommentForm(false);
+    setCommentDraft('');
+    setView('details');
+  };
+
+  if (!currentUserId) {
+    return <MobileLoginView onLogin={handleLogin} />;
+  }
+
+  const activeCompany = activeCompanyId
+    ? companies.find((company) => company.id === activeCompanyId) ?? companies[0] ?? null
+    : companies[0] ?? null;
+
+  const handleCreateService = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateError(null);
+    const client = clientsById.get(createClientId);
+    if (!client) {
+      setCreateError('Client introuvable.');
+      return;
+    }
+    const service = servicesById.get(createServiceId);
+    if (!service) {
+      setCreateError('Service introuvable.');
+      return;
+    }
+    const company = activeCompany;
+    if (!company) {
+      setCreateError('Aucune entreprise active définie.');
+      return;
+    }
+    const selectedOptions = createOptionIds.length ? createOptionIds : getDefaultOptionIds(service);
+    if (!selectedOptions.length) {
+      setCreateError('Sélectionnez au moins une prestation.');
+      return;
+    }
+    setIsCreatingService(true);
+    try {
+      const contactIds = resolveDefaultContacts(client);
+      const engagement = addEngagement({
+        clientId: client.id,
+        serviceId: service.id,
+        optionIds: selectedOptions,
+        optionOverrides: {},
+        scheduledAt: new Date().toISOString(),
+        status: 'planifié',
+        companyId: company.id,
+        kind: 'service',
+        supportType: createSupportType,
+        supportDetail: createSupportDetail.trim(),
+        additionalCharge: 0,
+        contactIds,
+        sendHistory: [],
+        invoiceNumber: null,
+        invoiceVatEnabled: null,
+        quoteNumber: null,
+        quoteStatus: null,
+        mobileDurationMinutes: null,
+        mobileCompletionComment: null,
+      });
+      setSelectedEngagementId(engagement.id);
+      setView('details');
+    } finally {
+      setIsCreatingService(false);
+    }
+  };
+
+  const handleToggleOption = (optionId: string) => {
+    setCreateOptionIds((previous) =>
+      previous.includes(optionId) ? previous.filter((id) => id !== optionId) : [...previous, optionId]
+    );
+  };
+
+  const handleNavigateBack = () => {
+    setView('services');
+    setSelectedEngagementId(null);
+  };
+
+  const renderServices = () => (
+    <section className="mobile-section">
+      <div className="mobile-section__header">
+        <div>
+          <h1>Services</h1>
+          <p className="mobile-section__subtitle">Suivi des interventions terrain</p>
+        </div>
+        <button
+          type="button"
+          className="mobile-button mobile-button--primary"
+          onClick={() => setView('create')}
+        >
+          Nouveau service
+        </button>
+      </div>
+      <div className="mobile-service-list">
+        {serviceEngagements.map((engagement) => {
+          const client = clientsById.get(engagement.clientId);
+          const service = servicesById.get(engagement.serviceId);
+          const label = service ? service.name : 'Service inconnu';
+          const clientLabel = client ? client.name : 'Client inconnu';
+          return (
+            <button
+              key={engagement.id}
+              type="button"
+              className="mobile-service-card"
+              onClick={() => {
+                setSelectedEngagementId(engagement.id);
+                setView('details');
+              }}
+            >
+              <div className="mobile-service-card__titles">
+                <h2>{label}</h2>
+                <p className="mobile-service-card__client">{clientLabel}</p>
+              </div>
+              <div className="mobile-service-card__meta">
+                <span className={`status-pill status-pill--${engagement.status}`}>
+                  {engagement.status}
+                </span>
+                <span className="mobile-service-card__date">{formatListDate(engagement.scheduledAt)}</span>
+              </div>
+            </button>
+          );
+        })}
+        {!serviceEngagements.length ? (
+          <div className="mobile-card mobile-card--empty">
+            <p>Aucun service enregistré pour le moment.</p>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+
+  const renderCreate = () => {
+    const client = clientsById.get(createClientId);
+    const service = servicesById.get(createServiceId);
+    const options: ServiceOption[] = service ? service.options : [];
+
+    return (
+      <section className="mobile-section">
+        <div className="mobile-section__header">
+          <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('services')}>
+            Retour
+          </button>
+          <h1>Créer un service</h1>
+        </div>
+        <form className="mobile-card mobile-card--form" onSubmit={handleCreateService}>
+          <label className="mobile-field">
+            <span>Client</span>
+            <select value={createClientId} onChange={(event) => setCreateClientId(event.target.value)}>
+              {clients.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mobile-field">
+            <span>Service catalogue</span>
+            <select
+              value={createServiceId}
+              onChange={(event) => {
+                const nextId = event.target.value;
+                setCreateServiceId(nextId);
+                setCreateOptionIds(getDefaultOptionIds(servicesById.get(nextId)));
+              }}
+            >
+              {services.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset className="mobile-fieldset">
+            <legend>Prestations incluses</legend>
+            <div className="mobile-checkbox-list">
+              {options.map((option) => (
+                <label key={option.id} className="mobile-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={createOptionIds.includes(option.id)}
+                    onChange={() => handleToggleOption(option.id)}
+                    disabled={!option.active}
+                  />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>
+                      {formatDuration(option.defaultDurationMin)} – {formatCurrency(option.unitPriceHT)} HT
+                    </small>
+                  </span>
+                </label>
+              ))}
+              {!options.length ? <p>Aucune prestation disponible pour ce service.</p> : null}
+            </div>
+          </fieldset>
+          <label className="mobile-field">
+            <span>Type de support</span>
+            <select
+              value={createSupportType}
+              onChange={(event) => setCreateSupportType(event.target.value as SupportType)}
+            >
+              {supportTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mobile-field">
+            <span>Détail du support</span>
+            <input
+              type="text"
+              value={createSupportDetail}
+              placeholder="Ex. SUV hybride"
+              onChange={(event) => setCreateSupportDetail(event.target.value)}
+            />
+          </label>
+          {createError ? <p className="mobile-feedback mobile-feedback--error">{createError}</p> : null}
+          <button type="submit" className="mobile-button mobile-button--primary" disabled={isCreatingService}>
+            {isCreatingService ? 'Enregistrement…' : 'Créer le service'}
+          </button>
+        </form>
+        {client ? (
+          <aside className="mobile-card mobile-card--hint">
+            <h2>Contacts</h2>
+            <ul>
+              {client.contacts.map((contact) => (
+                <li key={contact.id}>
+                  {contact.firstName} {contact.lastName} – {contact.email || 'Email manquant'}
+                </li>
+              ))}
+            </ul>
+          </aside>
+        ) : null}
+      </section>
+    );
+  };
+
+  const renderDetails = (engagement: Engagement) => {
+    const client = clientsById.get(engagement.clientId);
+    const service = servicesById.get(engagement.serviceId);
+    const options = service ? service.options.filter((option) => engagement.optionIds.includes(option.id)) : [];
+    const totals = computeEngagementTotals(engagement);
+    const vatPercent = safeVatRate(vatRate);
+    const vatMultiplier = vatPercent / 100;
+    const vatEnabledForInvoice = engagement.invoiceVatEnabled ?? (activeCompany?.vatEnabled ?? vatEnabled);
+    const subtotal = totals.price + totals.surcharge;
+    const vatAmount = vatEnabledForInvoice ? Math.round(subtotal * vatMultiplier * 100) / 100 : 0;
+    const totalTtc = vatEnabledForInvoice ? subtotal + vatAmount : subtotal;
+    const timerRunningElsewhere = timerState && timerState.engagementId !== engagement.id;
+    const isCurrentServiceTiming = timerState && timerState.engagementId === engagement.id;
+    const timerButtonLabel = timerRunningElsewhere
+      ? 'Minuteur en cours ailleurs'
+      : isCurrentServiceTiming
+      ? timerState?.running
+        ? 'Voir le minuteur'
+        : 'Reprendre le minuteur'
+      : 'Démarrer le service';
+
+    return (
+      <section className="mobile-section">
+        <div className="mobile-section__header">
+          <button type="button" className="mobile-button mobile-button--ghost" onClick={handleNavigateBack}>
+            Retour
+          </button>
+          <h1>Détails du service</h1>
+        </div>
+        <div className="mobile-card mobile-card--details">
+          <h2>{service ? service.name : 'Service inconnu'}</h2>
+          <p className="mobile-detail-line">
+            <strong>Client :</strong> {client ? client.name : 'Client introuvable'}
           </p>
-          <ul className="mobile-shell__list">
-            <li>Design responsive et épuré</li>
-            <li>Navigation principale en cours de conception</li>
-            <li>Actions rapides bientôt disponibles</li>
-          </ul>
-          <div className="mobile-shell__cta-group">
-            <a className="mobile-shell__cta" href="/?ui=desktop">
-              Ouvrir la version bureau
-            </a>
-            <a className="mobile-shell__cta mobile-shell__cta--secondary" href="mailto:support@washandgo.app">
-              Contacter le support
-            </a>
+          <p className="mobile-detail-line">
+            <strong>Statut :</strong>{' '}
+            <span className={`status-pill status-pill--${engagement.status}`}>{engagement.status}</span>
+          </p>
+          <p className="mobile-detail-line">
+            <strong>Date planifiée :</strong> {formatDateTime(engagement.scheduledAt)}
+          </p>
+          <p className="mobile-detail-line">
+            <strong>Support :</strong> {engagement.supportType} – {engagement.supportDetail || 'Non renseigné'}
+          </p>
+          {engagement.mobileDurationMinutes ? (
+            <p className="mobile-detail-line">
+              <strong>Durée enregistrée :</strong> {formatDuration(engagement.mobileDurationMinutes)}
+            </p>
+          ) : null}
+          {engagement.mobileCompletionComment ? (
+            <p className="mobile-detail-line">
+              <strong>Commentaire :</strong> {engagement.mobileCompletionComment}
+            </p>
+          ) : null}
+          <div className="mobile-prestation-list">
+            <h3>Prestations</h3>
+            <ul>
+              {options.map((option) => (
+                <li key={option.id}>
+                  <span>{option.label}</span>
+                  <small>
+                    {formatDuration(option.defaultDurationMin)} – {formatCurrency(option.unitPriceHT)} HT
+                  </small>
+                </li>
+              ))}
+              {!options.length ? <li>Aucune prestation sélectionnée.</li> : null}
+            </ul>
+            <div className="mobile-prestation-summary">
+              <div>
+                <span>Total HT</span>
+                <strong>{formatCurrency(subtotal)}</strong>
+              </div>
+              <div>
+                <span>TVA</span>
+                <strong>{vatEnabledForInvoice ? formatCurrency(vatAmount) : '—'}</strong>
+              </div>
+              <div>
+                <span>Total TTC</span>
+                <strong>{formatCurrency(totalTtc)}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="mobile-actions">
+            <button
+              type="button"
+              className="mobile-button mobile-button--primary"
+              onClick={() => {
+                if (timerRunningElsewhere) {
+                  return;
+                }
+                if (isCurrentServiceTiming) {
+                  setView('timer');
+                  return;
+                }
+                updateEngagement(engagement.id, { status: 'envoyé' });
+                handleStartTimer(engagement);
+              }}
+              disabled={timerRunningElsewhere}
+            >
+              {timerButtonLabel}
+            </button>
+            <button
+              type="button"
+              className="mobile-button"
+              onClick={() => setView('invoice')}
+            >
+              Créer une facture
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderTimerView = (engagement: Engagement) => {
+    const client = clientsById.get(engagement.clientId);
+    return (
+      <section className="mobile-section mobile-section--timer">
+        <div className="mobile-section__header">
+          <button type="button" className="mobile-button mobile-button--ghost" onClick={handleExitTimerView}>
+            Retour
+          </button>
+          <h1>Service en cours</h1>
+        </div>
+        <div className="mobile-card mobile-card--timer">
+          <p className="mobile-detail-line mobile-detail-line--center">
+            {client ? client.name : 'Client introuvable'}
+          </p>
+          <p className="mobile-timer__service">{servicesById.get(engagement.serviceId)?.name ?? 'Service'}</p>
+          <div className="mobile-timer__clock">{toClock(displayElapsed)}</div>
+          <div className="mobile-timer__controls">
+            {timerState?.running ? (
+              <button type="button" className="mobile-button" onClick={handlePauseTimer}>
+                Pause
+              </button>
+            ) : (
+              <button type="button" className="mobile-button" onClick={handleResumeTimer}>
+                Reprendre
+              </button>
+            )}
+            <button
+              type="button"
+              className="mobile-button mobile-button--primary"
+              onClick={handleCompleteTimer}
+              disabled={displayElapsed < 1000}
+            >
+              Terminer
+            </button>
+          </div>
+          {showCommentForm ? (
+            <div className="mobile-comment">
+              <label className="mobile-field">
+                <span>Commentaire de fin</span>
+                <textarea
+                  value={commentDraft}
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                  rows={3}
+                  placeholder="Résumé de l’intervention"
+                />
+              </label>
+              <button
+                type="button"
+                className="mobile-button mobile-button--primary"
+                onClick={() => handleValidateTimer(engagement)}
+              >
+                Valider
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+    );
+  };
+
+  const renderInvoiceView = (engagement: Engagement) => {
+    const client = clientsById.get(engagement.clientId);
+    const service = servicesById.get(engagement.serviceId);
+    if (!client || !service) {
+      return (
+        <section className="mobile-section">
+          <div className="mobile-section__header">
+            <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('details')}>
+              Retour
+            </button>
+            <h1>Facturation</h1>
+          </div>
+          <div className="mobile-card">
+            <p>Impossible de retrouver le service ou le client associé.</p>
           </div>
         </section>
-        <section className="mobile-shell__card mobile-shell__status">
-          <h2>État du test</h2>
-          <p>
-            {isTouchDevice
-              ? 'Vous utilisez un appareil tactile, la navigation est adaptée.'
-              : 'Cette vue mobile peut être testée sur ordinateur via ?ui=mobile.'}
+      );
+    }
+
+    const options = service.options.filter((option) => engagement.optionIds.includes(option.id));
+    const totals = computeEngagementTotals(engagement);
+    const company = engagement.companyId
+      ? companies.find((item) => item.id === engagement.companyId) ?? activeCompany
+      : activeCompany;
+    const vatPercent = safeVatRate(vatRate);
+    const vatMultiplier = vatPercent / 100;
+    const vatEnabledForInvoice = engagement.invoiceVatEnabled ?? (company?.vatEnabled ?? vatEnabled);
+    const subtotal = totals.price + totals.surcharge;
+    const vatAmount = vatEnabledForInvoice ? Math.round(subtotal * vatMultiplier * 100) / 100 : 0;
+    const totalTtc = vatEnabledForInvoice ? subtotal + vatAmount : subtotal;
+
+    const handleToggleContact = (contactId: string) => {
+      setInvoiceContactIds((previous) =>
+        previous.includes(contactId) ? previous.filter((id) => id !== contactId) : [...previous, contactId]
+      );
+    };
+
+    const handleGenerateInvoice = () => {
+      setInvoiceFeedback(null);
+      if (!company) {
+        setInvoiceFeedback('Associez une entreprise à la prestation avant de facturer.');
+        return;
+      }
+      if (!options.length && engagement.additionalCharge <= 0) {
+        setInvoiceFeedback('Ajoutez au moins une prestation ou un supplément avant de facturer.');
+        return;
+      }
+      const recipientsContacts = client.contacts.filter((contact) => invoiceContactIds.includes(contact.id));
+      const emails = unique(
+        [
+          ...recipientsContacts.map((contact) => contact.email).filter((value): value is string => Boolean(value)),
+          invoiceEmail && isValidEmail(invoiceEmail) ? invoiceEmail.trim() : null,
+        ].filter(Boolean)
+      );
+      const issueDate = new Date();
+      const documentNumber = engagement.invoiceNumber ?? getNextInvoiceNumber(engagements, issueDate);
+      const vatEnabledForDocument = vatEnabledForInvoice;
+
+      setIsGeneratingInvoice(true);
+      try {
+        const pdf = generateInvoicePdf({
+          documentNumber,
+          issueDate,
+          serviceDate: new Date(engagement.scheduledAt),
+          company,
+          client,
+          service,
+          options,
+          optionOverrides: engagement.optionOverrides ?? {},
+          additionalCharge: engagement.additionalCharge,
+          vatRate: vatPercent,
+          vatEnabled: vatEnabledForDocument,
+          status: engagement.status,
+          supportType: engagement.supportType,
+          supportDetail: engagement.supportDetail,
+          paymentMethod: null,
+        });
+        const pdfDataUri = pdf.output('datauristring');
+        const blob = pdf.output('blob');
+
+        const payload = {
+          title: `${documentNumber} — ${client.name}`,
+          category: 'Factures',
+          description: `Facture générée le ${formatDate(issueDate.toISOString())} pour ${client.name}.`,
+          owner: `${userProfile.firstName} ${userProfile.lastName}`.trim() || 'Wash&Go',
+          companyId: company.id,
+          tags: ['facture', `engagement:${engagement.id}`, `client:${client.id}`],
+          source: 'Archive interne' as const,
+          fileType: 'PDF',
+          size: formatFileSize(blob.size),
+          fileName: `${documentNumber}.pdf`,
+          fileData: pdfDataUri,
+          kind: 'facture' as const,
+          engagementId: engagement.id,
+          number: documentNumber,
+          status: engagement.status === 'réalisé' ? 'payé' : 'envoyé',
+          totalHt: subtotal,
+          totalTtc: totalTtc,
+          vatAmount: vatEnabledForDocument ? vatAmount : 0,
+          vatRate: vatEnabledForDocument ? vatPercent : 0,
+          issueDate: issueDate.toISOString(),
+          recipients: emails.length ? emails : undefined,
+        };
+
+        const indexKey = `${engagement.id}:${documentNumber}`;
+        const existingDocumentId = documentsByEngagementNumber.get(indexKey);
+        if (existingDocumentId) {
+          updateDocument(existingDocumentId, { ...payload, updatedAt: new Date().toISOString() });
+        } else {
+          addDocument(payload);
+        }
+
+        pdf.save(`${documentNumber}.pdf`);
+
+        const mergedContactIds = unique([...engagement.contactIds, ...invoiceContactIds]);
+        updateEngagement(engagement.id, {
+          contactIds: mergedContactIds,
+          invoiceNumber: documentNumber,
+          invoiceVatEnabled: vatEnabledForDocument,
+          kind: 'facture',
+          status: 'réalisé',
+        });
+
+        setInvoiceFeedback('Facture générée et téléchargée sur votre appareil.');
+      } catch (error) {
+        console.error('[Wash&Go] Impossible de générer la facture mobile', error);
+        setInvoiceFeedback("Impossible de générer la facture. Réessayez plus tard.");
+      } finally {
+        setIsGeneratingInvoice(false);
+      }
+    };
+
+    return (
+      <section className="mobile-section">
+        <div className="mobile-section__header">
+          <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('details')}>
+            Retour
+          </button>
+          <h1>Facturer le service</h1>
+        </div>
+        <div className="mobile-card mobile-card--form">
+          <p className="mobile-detail-line">
+            <strong>Client :</strong> {client.name}
           </p>
-        </section>
+          <p className="mobile-detail-line">
+            <strong>Service :</strong> {service.name}
+          </p>
+          <div className="mobile-prestation-summary mobile-prestation-summary--compact">
+            <div>
+              <span>Total HT</span>
+              <strong>{formatCurrency(subtotal)}</strong>
+            </div>
+            <div>
+              <span>TVA</span>
+              <strong>{vatEnabledForInvoice ? formatCurrency(vatAmount) : '—'}</strong>
+            </div>
+            <div>
+              <span>Total TTC</span>
+              <strong>{formatCurrency(totalTtc)}</strong>
+            </div>
+          </div>
+          <label className="mobile-field">
+            <span>Email supplémentaire</span>
+            <input
+              type="email"
+              value={invoiceEmail}
+              onChange={(event) => setInvoiceEmail(event.target.value)}
+              placeholder="client@example.com"
+            />
+          </label>
+          <fieldset className="mobile-fieldset">
+            <legend>Destinataires</legend>
+            <div className="mobile-checkbox-list">
+              {client.contacts.length ? (
+                client.contacts.map((contact) => (
+                  <label key={contact.id} className="mobile-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={invoiceContactIds.includes(contact.id)}
+                      onChange={() => handleToggleContact(contact.id)}
+                      disabled={!contact.active}
+                    />
+                    <span>
+                      <strong>
+                        {contact.firstName} {contact.lastName}
+                      </strong>
+                      <small>{contact.email || 'Email manquant'}</small>
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <p>Aucun contact enregistré pour ce client.</p>
+              )}
+            </div>
+          </fieldset>
+          {invoiceFeedback ? (
+            <p
+              className={`mobile-feedback ${invoiceFeedback.includes('Impossible') ? 'mobile-feedback--error' : ''}`}
+            >
+              {invoiceFeedback}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="mobile-button mobile-button--primary"
+            onClick={handleGenerateInvoice}
+            disabled={isGeneratingInvoice}
+          >
+            {isGeneratingInvoice ? 'Génération…' : 'Télécharger la facture'}
+          </button>
+        </div>
+        <aside className="mobile-card mobile-card--hint">
+          <h2>Prestations facturées</h2>
+          <ul>
+            {options.map((option) => (
+              <li key={option.id}>
+                {option.label} – {formatCurrency(option.unitPriceHT)} HT
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </section>
+    );
+  };
+
+  return (
+    <div className="mobile-app">
+      <header className="mobile-app__header">
+        <div className="mobile-app__brand">
+          <div className="mobile-app__logo" aria-hidden="true">
+            WG
+          </div>
+          <div>
+            <p className="mobile-app__product">Wash&amp;Go</p>
+            <p className="mobile-app__subtitle">Interface mobile</p>
+          </div>
+        </div>
+        <div className="mobile-app__user">
+          <span>
+            {userProfile.firstName} {userProfile.lastName}
+          </span>
+          <button type="button" className="mobile-button mobile-button--ghost" onClick={logout}>
+            Déconnexion
+          </button>
+        </div>
+      </header>
+      <main className="mobile-app__main">
+        {view === 'services' && renderServices()}
+        {view === 'create' && renderCreate()}
+        {view === 'details' && selectedEngagement ? renderDetails(selectedEngagement) : null}
+        {view === 'timer' && selectedEngagement && timerState ? renderTimerView(selectedEngagement) : null}
+        {view === 'invoice' && selectedEngagement ? renderInvoiceView(selectedEngagement) : null}
+        {view !== 'services' && view !== 'create' && !selectedEngagement ? (
+          <div className="mobile-card mobile-card--empty">
+            <p>Service introuvable.</p>
+            <button type="button" className="mobile-button" onClick={handleNavigateBack}>
+              Retour à la liste
+            </button>
+          </div>
+        ) : null}
       </main>
-      <footer className="mobile-shell__footer">
-        <small>© {currentYear} Wash&Go – Version mobile en préparation</small>
-      </footer>
+      <footer className="mobile-app__footer">© {new Date().getFullYear()} Wash&amp;Go</footer>
     </div>
   );
 };
