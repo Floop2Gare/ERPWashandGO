@@ -26,6 +26,7 @@ import {
   ClientContactRole,
   Company,
   Engagement,
+  EngagementSendRecord,
   EngagementKind,
   EngagementStatus,
   EngagementOptionOverride,
@@ -35,6 +36,7 @@ import {
   DocumentRecord,
 } from '../store/useAppData';
 import { formatCurrency, formatDate, formatDuration, mergeBodyWithSignature } from '../lib/format';
+import { downloadCsv } from '../lib/csv';
 import { generateInvoicePdf, generateQuotePdf } from '../lib/invoice';
 import { BRAND_NAME } from '../lib/branding';
 import { openEmailComposer, sendDocumentEmail, SendDocumentEmailResult } from '../lib/email';
@@ -840,6 +842,118 @@ const ServicePage = () => {
     });
     setSelectedEngagementIds([]);
     setFeedback(`${targets.length} prestation(s) archivées.`);
+  };
+
+  const handleExportEngagements = () => {
+    if (!filteredEngagements.length) {
+      setFeedback('Aucune prestation à exporter.');
+      return;
+    }
+
+    const header = [
+      'Type de document',
+      'Numéro',
+      'Client',
+      'Entreprise',
+      'Statut prestation',
+      'Statut commercial',
+      'Date prévue',
+      'Support',
+      'Détail support',
+      'Service',
+      'Prestations sélectionnées',
+      'Durée totale (minutes)',
+      'Durée totale',
+      'Montant HT',
+      'Majoration',
+      'TVA',
+      'Total TTC',
+      'TVA activée',
+      'Contacts destinataires',
+      'Emails destinataires',
+      'Dernier envoi',
+    ];
+
+    const rows = filteredEngagements.map((engagement) => {
+      const client = clientsById.get(engagement.clientId);
+      const company = engagement.companyId ? companiesById.get(engagement.companyId) ?? null : null;
+      const service = servicesById.get(engagement.serviceId);
+      const optionsSelected =
+        service?.options.filter((option) => engagement.optionIds.includes(option.id)) ?? ([] as ServiceOption[]);
+      const totals = computeEngagementTotals(engagement);
+      const vatEnabledForRow = engagement.invoiceVatEnabled ?? (company?.vatEnabled ?? vatEnabled);
+      const vatAmount = vatEnabledForRow ? Math.round(totals.price * vatMultiplier * 100) / 100 : 0;
+      const finalTotal = totals.price + vatAmount + totals.surcharge;
+      const optionSummary = optionsSelected.length
+        ? optionsSelected
+            .map((option) => {
+              const override = resolveOptionOverride(option, engagement.optionOverrides?.[option.id]);
+              const details = [
+                `x${override.quantity}`,
+                formatDuration(override.durationMin),
+                formatCurrency(override.unitPriceHT),
+              ].join(' · ');
+              return `${option.label} (${details})`;
+            })
+            .join(' | ')
+        : 'Aucune prestation';
+      const contactDetails = engagement.contactIds
+        .map((contactId) => client?.contacts.find((contact) => contact.id === contactId) ?? null)
+        .filter((contact): contact is ClientContact => Boolean(contact));
+      const contactsSummary = contactDetails
+        .map((contact) => {
+          const name = `${contact.firstName} ${contact.lastName}`.trim();
+          const coordinates = [contact.email, contact.mobile].filter(Boolean).join(' / ');
+          const roles = contact.roles.length ? `Rôles : ${contact.roles.join(', ')}` : '';
+          return [name || 'Contact', coordinates, roles].filter(Boolean).join(' – ');
+        })
+        .join(' | ');
+      const contactsEmails = contactDetails.map((contact) => contact.email).filter(Boolean).join(' | ');
+      const lastSendRecord = engagement.sendHistory.reduce<EngagementSendRecord | null>((latest, record) => {
+        if (!latest) {
+          return record;
+        }
+        return record.sentAt > latest.sentAt ? record : latest;
+      }, null);
+      const lastSendLabel = lastSendRecord ? formatDate(lastSendRecord.sentAt) : '';
+      const lastSendContacts = lastSendRecord
+        ? lastSendRecord.contactIds
+            .map((contactId) => client?.contacts.find((contact) => contact.id === contactId)?.email ?? null)
+            .filter((email): email is string => Boolean(email))
+            .join(' | ')
+        : '';
+
+      return [
+        documentLabels[engagement.kind],
+        getEngagementDocumentNumber(engagement),
+        client?.name ?? 'Client inconnu',
+        company?.name ?? '',
+        engagement.status,
+        engagement.kind === 'devis'
+          ? engagement.quoteStatus ?? '—'
+          : engagement.kind === 'facture'
+          ? 'Facture'
+          : 'Service',
+        formatDate(engagement.scheduledAt),
+        engagement.supportType,
+        engagement.supportDetail,
+        service?.name ?? 'Service archivé',
+        optionSummary,
+        totals.duration,
+        totals.duration ? formatDuration(totals.duration) : '',
+        formatCurrency(totals.price),
+        totals.surcharge ? formatCurrency(totals.surcharge) : '',
+        vatEnabledForRow ? formatCurrency(vatAmount) : '',
+        formatCurrency(finalTotal),
+        vatEnabledForRow ? 'Oui' : 'Non',
+        contactsSummary,
+        contactsEmails,
+        lastSendLabel ? `${lastSendLabel}${lastSendContacts ? ` – ${lastSendContacts}` : ''}` : '',
+      ];
+    });
+
+    downloadCsv({ fileName: 'services.csv', header, rows });
+    setFeedback(`${rows.length} prestation(s) exportée(s).`);
   };
 
   useEffect(() => {
@@ -2170,13 +2284,16 @@ const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
           title="Service"
           description="Visualisez et pilotez chaque prestation"
           action={
-            hasPermission('service.create') ? (
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={handleExportEngagements}>
+                Exporter
+              </Button>
+              {hasPermission('service.create') && (
                 <Button size="sm" onClick={() => openCreation()}>
                   Créer un service
                 </Button>
-              </div>
-            ) : undefined
+              )}
+            </div>
           }
         >
         <div className="grid gap-4 lg:grid-cols-4">
