@@ -45,12 +45,33 @@ export const Sidebar = ({
 
   const sidebarTitlePreference = useAppData((state) => state.sidebarTitlePreference);
   const hasPageAccess = useAppData((state) => state.hasPageAccess);
+  const companies = useAppData((state) => state.companies);
+  const activeCompanyId = useAppData((state) => state.activeCompanyId);
   const baseline = BRAND_BASELINE.trim();
   const showBaselineText = baseline.length > 0;
 
   useEffect(() => {
     ensureLatest();
   }, [ensureLatest]);
+
+  const activeCompany = useMemo(() => {
+    if (!companies.length) {
+      return null;
+    }
+    return companies.find((company) => company.id === activeCompanyId) ?? companies[0];
+  }, [companies, activeCompanyId]);
+
+  const brandInitials = useMemo(() => {
+    const source = activeCompany?.name?.trim() || BRAND_NAME;
+    const chunks = source
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((chunk) => chunk.charAt(0).toUpperCase());
+    if (chunks.length === 0) {
+      return 'WA';
+    }
+    return chunks.slice(0, 2).join('');
+  }, [activeCompany]);
 
   const orderedLinks = useMemo(() => {
     const linkMap = new Map(SIDEBAR_NAVIGATION_LINKS.map((link) => [link.to, link]));
@@ -177,7 +198,6 @@ export const Sidebar = ({
   const draggingKey = draggingKeyState;
 
   const showSidebarHeader = !sidebarTitlePreference.hidden;
-  const sidebarTitle = sidebarTitlePreference.text?.trim() ?? '';
   const isCollapsed = variant === 'desktop' && compact && !isEditing;
 
   const content = (
@@ -191,29 +211,31 @@ export const Sidebar = ({
     >
       <div className="mb-8 space-y-4">
         <div className="flex items-center gap-3">
-          <span className="sidebar-brand flex h-12 w-12 flex-shrink-0 items-center justify-center text-sm" aria-hidden="true">
-            WA
-          </span>
+          <div className="sidebar-brand flex h-12 w-12 flex-shrink-0 items-center justify-center" aria-hidden="true">
+            {activeCompany?.logoUrl ? (
+              <img
+                src={activeCompany.logoUrl}
+                alt={`Logo ${activeCompany.name}`}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span className="sidebar-brand__fallback" aria-hidden>
+                {brandInitials}
+              </span>
+            )}
+          </div>
           {showSidebarHeader && (
             <div className="sidebar-header-text min-w-0">
-                <p
-                  className="text-[11px] font-semibold uppercase tracking-[0.3em]"
-                  style={{ color: 'var(--txt-accent)' }}
-                >
-                  {BRAND_NAME}
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: 'var(--txt-accent)' }}>
+                {BRAND_NAME}
+              </p>
+              {showBaselineText && (
+                <p className="text-xs" style={{ color: 'var(--txt-muted)' }}>
+                  {baseline}
                 </p>
-                {sidebarTitle && (
-                  <h1 className="truncate text-base font-semibold" style={{ color: 'var(--txt-primary)' }}>
-                    {sidebarTitle}
-                  </h1>
-                )}
-                {showBaselineText && (
-                  <p className="text-xs" style={{ color: 'var(--txt-muted)' }}>
-                    {baseline}
-                  </p>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+          )}
         </div>
         {variant === 'mobile' && (
           <div className="flex items-center justify-between">

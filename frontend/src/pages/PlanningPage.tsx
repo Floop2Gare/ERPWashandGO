@@ -58,6 +58,13 @@ const PlanningPage = () => {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
 
+  const engagementsById = useMemo(
+    () => new Map(engagements.map((engagement) => [engagement.id, engagement])),
+    [engagements]
+  );
+  const clientsById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+  const servicesById = useMemo(() => new Map(services.map((service) => [service.id, service])), [services]);
+
   const { effectiveSlots, slotStatusOverrides } = useMemo(() => {
     const overrides = new Map<string, EngagementStatus>();
     const resolvedSlots = [...slots];
@@ -236,21 +243,80 @@ const PlanningPage = () => {
                   {monthDays.map((day) => {
                     const key = format(day, 'yyyy-MM-dd');
                     const daySlots = slotsByDate.get(key) ?? [];
+                    const sortedSlots = [...daySlots].sort(
+                      (a, b) => parseTimeToMinutes(a.start) - parseTimeToMinutes(b.start)
+                    );
+                    const visibleSlots = sortedSlots.slice(0, 3);
+                    const hiddenCount = sortedSlots.length - visibleSlots.length;
                     const isToday = isSameDay(day, new Date());
                     const inMonth = isSameMonth(day, visibleMonth);
+                    const hasSlots = sortedSlots.length > 0;
                     return (
                       <button
                         key={key}
+                        type="button"
                         onClick={() => handleDaySelection(day)}
-                        className={`flex h-28 flex-col justify-between rounded-soft border px-3 py-2 text-left text-sm transition ${
-                          isToday ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 bg-white'
-                        } ${!inMonth ? 'text-slate-400' : 'text-slate-700'} hover:border-primary hover:bg-primary/5`}
+                        className={`group flex h-32 flex-col rounded-soft border px-3 py-2 text-left text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
+                          isToday ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-surface text-text'
+                        } ${!inMonth ? 'opacity-60' : ''} hover:border-primary hover:bg-primary/5`}
                       >
-                        <span className="text-xs font-semibold tracking-wide">{format(day, 'd')}</span>
-                        <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
-                          {isToday ? 'Aujourd’hui' : ''}
-                        </span>
-                        <span className="text-[11px] text-slate-500">{daySlots.length} créneau(x)</span>
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="text-xs font-semibold tracking-wide">{format(day, 'd')}</span>
+                          {isToday && (
+                            <span className="rounded-full border border-primary/40 px-2 py-[2px] text-[10px] font-medium uppercase tracking-[0.22em] text-primary">
+                              Aujourd’hui
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-2 flex-1 space-y-1 overflow-hidden">
+                          {hasSlots ? (
+                            <>
+                              {visibleSlots.map((slot) => {
+                                const engagement = slot.engagementId
+                                  ? engagementsById.get(slot.engagementId)
+                                  : undefined;
+                                const service = engagement ? servicesById.get(engagement.serviceId) : undefined;
+                                const client = engagement ? clientsById.get(engagement.clientId) : undefined;
+                                const optionLabels =
+                                  engagement && service
+                                    ? engagement.optionIds
+                                        .map((id) => service.options.find((option) => option.id === id)?.label)
+                                        .filter((label): label is string => Boolean(label))
+                                    : [];
+                                const primaryOption = optionLabels[0];
+                                const additionalOptions = Math.max(optionLabels.length - 1, 0);
+                                const prestationLabel =
+                                  primaryOption
+                                    ? `${primaryOption}${additionalOptions > 0 ? ` (+${additionalOptions})` : ''}`
+                                    : service?.name ?? client?.name ?? 'Prestation';
+                                const slotStatus = slotStatusOverrides.get(slot.id) ?? engagement?.status;
+                                const toneClasses = getSlotToneClasses(slotStatus);
+                                const tooltipParts = [
+                                  prestationLabel,
+                                  client?.name,
+                                  `${slot.start} – ${slot.end}`,
+                                ].filter(Boolean);
+                                return (
+                                  <div
+                                    key={slot.id}
+                                    className={`flex items-center gap-2 rounded-md border px-2 py-1 text-[11px] leading-tight ${toneClasses}`}
+                                    title={tooltipParts.join(' • ')}
+                                  >
+                                    <span className="whitespace-nowrap font-semibold">{slot.start}</span>
+                                    <span className="truncate font-medium">{prestationLabel}</span>
+                                  </div>
+                                );
+                              })}
+                              {hiddenCount > 0 && (
+                                <span className="block truncate text-[11px] font-medium text-primary">
+                                  +{hiddenCount} prestation(s)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="block text-[11px] text-muted">Aucune prestation</span>
+                          )}
+                        </div>
                       </button>
                     );
                   })}

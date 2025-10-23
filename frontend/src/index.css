@@ -314,12 +314,24 @@ body[data-theme='dark'] ::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: var(--inverse-text);
   border-radius: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--txt-accent);
   box-shadow: none;
+  overflow: hidden;
+}
+
+.sidebar-brand__fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--txt-accent);
 }
 
 .quick-link {
