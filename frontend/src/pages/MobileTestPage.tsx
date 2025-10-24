@@ -142,6 +142,47 @@ const formatListDate = (isoDate: string) => {
   return formatDateFn(parsed, 'd MMM yyyy', { locale: fr });
 };
 
+const hasNotificationSupport = () =>
+  typeof window !== 'undefined' && typeof Notification !== 'undefined';
+
+const ensureNotificationPermission = async (): Promise<boolean> => {
+  if (!hasNotificationSupport()) {
+    return false;
+  }
+  if (Notification.permission === 'granted') {
+    return true;
+  }
+  if (Notification.permission === 'denied') {
+    return false;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  } catch (error) {
+    console.warn('[Wash&Go] Impossible de demander la permission de notification', error);
+    return false;
+  }
+};
+
+const showMobileNotification = async (title: string, options: NotificationOptions) => {
+  if (!hasNotificationSupport()) {
+    return;
+  }
+  try {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        registration.showNotification(title, options);
+        return;
+      }
+    }
+    // Fallback to the direct Notification constructor when no service worker is registered.
+    new Notification(title, options);
+  } catch (error) {
+    console.warn('[Wash&Go] Impossible d\'afficher la notification', error);
+  }
+};
+
 const isValidEmail = (value: string) =>
   /^(?:[\w.!#$%&'*+/=?^`{|}~-]+@(?:[\w-]+\.)+[\w-]{2,})$/.test(value.trim());
 
@@ -522,6 +563,49 @@ const MobileTestPage = () => {
     [todaysServiceEngagements]
   );
 
+  const notifyServiceStarted = async (engagement: Engagement) => {
+    if (!hasNotificationSupport()) {
+      return;
+    }
+    const granted = await ensureNotificationPermission();
+    if (!granted) {
+      return;
+    }
+    const client = clientsById.get(engagement.clientId) ?? null;
+    const service = servicesById.get(engagement.serviceId) ?? null;
+    const serviceName = service?.name?.trim() || 'Service Wash&Go';
+    const title = `Service démarré – ${serviceName}`;
+    const bodyLines: string[] = [];
+    if (client?.name) {
+      bodyLines.push(client.name);
+    }
+    const supportLine = engagement.supportDetail
+      ? `${engagement.supportType} · ${engagement.supportDetail}`
+      : engagement.supportType;
+    if (supportLine) {
+      bodyLines.push(supportLine);
+    }
+    if (engagement.scheduledAt) {
+      const scheduledDate = new Date(engagement.scheduledAt);
+      if (!Number.isNaN(scheduledDate.getTime())) {
+        try {
+          const formatted = formatDateTime(engagement.scheduledAt);
+          if (formatted && formatted !== 'Invalid Date') {
+            bodyLines.push(`Planifié : ${formatted}`);
+          }
+        } catch (error) {
+          console.warn('[Wash&Go] Format de date invalide pour la notification', error);
+        }
+      }
+    }
+    const body = bodyLines.join('\n');
+    await showMobileNotification(title, {
+      body,
+      tag: `washandgo-mobile-service-${engagement.id}`,
+      data: { engagementId: engagement.id, kind: 'service-start' },
+    });
+  };
+
   useEffect(() => {
     if (!currentUserId || typeof window === 'undefined') {
       return;
@@ -621,6 +705,7 @@ const MobileTestPage = () => {
     setShowCommentForm(false);
     setCommentDraft('');
     setView('timer');
+    void notifyServiceStarted(engagement);
   };
 
   const handlePauseTimer = () => {
