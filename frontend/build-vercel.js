@@ -1,20 +1,20 @@
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 
 console.log('🚀 Starting Vercel build process...');
 
-// Étape 1: Build du frontend
+// Étape 1: Build du frontend (nous sommes déjà dans le répertoire frontend)
 console.log('📦 Building frontend...');
 try {
-  execSync('npm --prefix frontend run build', { stdio: 'inherit' });
+  execSync('npm run build', { stdio: 'inherit' });
   console.log('✅ Frontend build completed');
 } catch (error) {
   console.error('❌ Frontend build failed:', error.message);
   process.exit(1);
 }
 
-// Étape 2: Copier les fichiers
+// Étape 2: Copier les fichiers vers le répertoire parent
 console.log('📁 Copying build files...');
 function copyDir(src, dest) {
   if (!fs.existsSync(dest)) {
@@ -35,7 +35,7 @@ function copyDir(src, dest) {
   }
 }
 
-// Copier frontend/dist vers dist
-copyDir('frontend/dist', 'dist');
-console.log('✅ Build files copied to dist directory');
+// Copier dist vers ../dist (répertoire parent)
+copyDir('dist', '../dist');
+console.log('✅ Build files copied to ../dist directory');
 console.log('🎉 Vercel build process completed successfully!');
