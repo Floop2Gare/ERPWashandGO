@@ -70,6 +70,13 @@ const toClock = (elapsedMs: number) => {
   return `${formatPart(hours)}:${formatPart(minutes)}:${formatPart(seconds)}`;
 };
 
+const formatLocalDateTimeInput = (date: Date) => {
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+    date.getMinutes()
+  )}`;
+};
+
 const getDefaultOptionIds = (service: Service | undefined) =>
   service ? service.options.filter((option) => option.active).map((option) => option.id) : [];
 
@@ -289,6 +296,7 @@ const MobileTestPage = () => {
   const [createSupportType, setCreateSupportType] = useState<SupportType>('Voiture');
   const [createSupportDetail, setCreateSupportDetail] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createScheduledAt, setCreateScheduledAt] = useState<string>(() => formatLocalDateTimeInput(new Date()));
   const [isCreatingService, setIsCreatingService] = useState(false);
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
 
@@ -673,6 +681,7 @@ const MobileTestPage = () => {
     setCreateSupportType('Voiture');
     setCreateSupportDetail('');
     setCreateError(null);
+    setCreateScheduledAt(formatLocalDateTimeInput(new Date()));
   }, [clients, services, servicesById, view]);
 
   useEffect(() => {
@@ -823,6 +832,11 @@ const MobileTestPage = () => {
       setCreateError('Sélectionnez au moins une prestation.');
       return;
     }
+    const scheduledAtInput = new Date(createScheduledAt);
+    if (!isValidDate(scheduledAtInput)) {
+      setCreateError('Choisissez une date et une heure valides.');
+      return;
+    }
     setIsCreatingService(true);
     try {
       const contactIds = resolveDefaultContacts(client);
@@ -831,17 +845,17 @@ const MobileTestPage = () => {
         serviceId: service.id,
         optionIds: selectedOptions,
         optionOverrides: {},
-        scheduledAt: new Date().toISOString(),
+        scheduledAt: scheduledAtInput.toISOString(),
         status: 'planifié',
         companyId: company.id,
         kind: 'service',
         supportType: createSupportType,
-      supportDetail: createSupportDetail.trim(),
-      additionalCharge: 0,
-      contactIds,
-      assignedUserIds: currentUserId ? [currentUserId] : [],
-      sendHistory: [],
-      invoiceNumber: null,
+        supportDetail: createSupportDetail.trim(),
+        additionalCharge: 0,
+        contactIds,
+        assignedUserIds: currentUserId ? [currentUserId] : [],
+        sendHistory: [],
+        invoiceNumber: null,
         invoiceVatEnabled: null,
         quoteNumber: null,
         quoteStatus: null,
@@ -1170,6 +1184,14 @@ const MobileTestPage = () => {
                 ))}
               </select>
             </label>
+            <label className="mobile-field">
+              <span>Date planifiée</span>
+              <input
+                type="datetime-local"
+                value={createScheduledAt}
+                onChange={(event) => setCreateScheduledAt(event.target.value)}
+              />
+            </label>
           </div>
           <div className="mobile-card__section">
             <div className="mobile-section__header mobile-section__header--compact">
@@ -1279,6 +1301,14 @@ const MobileTestPage = () => {
         : 'Reprendre le minuteur'
       : 'Démarrer le service';
     const statusIntent = getStatusIntent(engagement.status);
+    const scheduledDate = new Date(engagement.scheduledAt);
+    const hasScheduledDate = isValidDate(scheduledDate);
+    const scheduledDayRaw = hasScheduledDate
+      ? formatDateFn(scheduledDate, 'EEEE d MMMM yyyy', { locale: fr })
+      : 'Non planifié';
+    const scheduledDayLabel = scheduledDayRaw.charAt(0).toUpperCase() + scheduledDayRaw.slice(1);
+    const scheduledTimeLabel = hasScheduledDate ? formatDateFn(scheduledDate, 'HH:mm', { locale: fr }) : null;
+    const supportDetailLabel = engagement.supportDetail?.trim();
 
     return (
       <section className="mobile-section" id="mobile-details-section">
@@ -1299,27 +1329,35 @@ const MobileTestPage = () => {
               {statusLabels[engagement.status]}
             </span>
           </div>
-          <div className="mobile-detail-grid">
-            <div className="mobile-detail">
-              <span className="mobile-detail__label">Client</span>
-              <span className="mobile-detail__value">{clientLabel}</span>
-            </div>
-            <div className="mobile-detail">
-              <span className="mobile-detail__label">Date planifiée</span>
-              <span className="mobile-detail__value">{formatDateTime(engagement.scheduledAt)}</span>
-            </div>
-            <div className="mobile-detail">
-              <span className="mobile-detail__label">Support</span>
-              <span className="mobile-detail__value">
-                {engagement.supportType}
-                {engagement.supportDetail ? ` · ${engagement.supportDetail}` : ''}
-              </span>
-            </div>
+          <div className="mobile-detail-summary">
+            <article className="mobile-detail-summary__item">
+              <span className="mobile-detail-summary__label">Client</span>
+              <p className="mobile-detail-summary__value">{clientLabel}</p>
+              {client?.email ? (
+                <span className="mobile-detail-summary__meta">{client.email}</span>
+              ) : null}
+            </article>
+            <article className="mobile-detail-summary__item">
+              <span className="mobile-detail-summary__label">Date planifiée</span>
+              <p className="mobile-detail-summary__value">{scheduledDayLabel}</p>
+              {scheduledTimeLabel ? (
+                <span className="mobile-detail-summary__meta">{`À ${scheduledTimeLabel}`}</span>
+              ) : null}
+            </article>
+            <article className="mobile-detail-summary__item">
+              <span className="mobile-detail-summary__label">Support</span>
+              <p className="mobile-detail-summary__value">{engagement.supportType}</p>
+              {supportDetailLabel ? (
+                <span className="mobile-detail-summary__meta">{supportDetailLabel}</span>
+              ) : null}
+            </article>
             {engagement.mobileDurationMinutes ? (
-              <div className="mobile-detail">
-                <span className="mobile-detail__label">Durée enregistrée</span>
-                <span className="mobile-detail__value">{formatDuration(engagement.mobileDurationMinutes)}</span>
-              </div>
+              <article className="mobile-detail-summary__item">
+                <span className="mobile-detail-summary__label">Durée enregistrée</span>
+                <p className="mobile-detail-summary__value">
+                  {formatDuration(engagement.mobileDurationMinutes)}
+                </p>
+              </article>
             ) : null}
           </div>
           {engagement.mobileCompletionComment ? (
