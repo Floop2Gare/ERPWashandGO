@@ -213,6 +213,7 @@ const buildPreviewEngagement = (draft: EngagementDraft, kind: EngagementKind): E
   supportDetail: draft.supportDetail.trim(),
   additionalCharge: draft.additionalCharge,
   contactIds: [...draft.contactIds],
+  assignedUserIds: [],
   sendHistory: [],
   invoiceNumber: null,
   invoiceVatEnabled: null,

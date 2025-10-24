@@ -106,6 +106,7 @@ export type Engagement = {
   supportDetail: string;
   additionalCharge: number;
   contactIds: string[];
+  assignedUserIds: string[];
   sendHistory: EngagementSendRecord[];
   invoiceNumber: string | null;
   invoiceVatEnabled: boolean | null;
@@ -459,10 +460,12 @@ type AppState = {
   setClientBillingContact: (clientId: string, contactId: string) => void;
   removeClient: (clientId: string) => void;
   restoreClient: (payload: { client: Client; engagements: Engagement[]; notes: Note[] }) => void;
-  addEngagement: (payload: Omit<Engagement, 'id'>) => Engagement;
+  addEngagement: (
+    payload: Omit<Engagement, 'id' | 'assignedUserIds'> & { assignedUserIds?: string[] }
+  ) => Engagement;
   updateEngagement: (
     engagementId: string,
-    updates: Partial<Omit<Engagement, 'id'>>
+    updates: Partial<Omit<Engagement, 'id'>> & { assignedUserIds?: string[] }
   ) => Engagement | null;
   recordEngagementSend: (
     engagementId: string,
@@ -1538,6 +1541,7 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'SUV hybride',
     additionalCharge: 0,
     contactIds: ['ct1'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
@@ -1559,6 +1563,7 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Angle 5 places',
     additionalCharge: 0,
     contactIds: ['ct3'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
@@ -1580,6 +1585,7 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Tapis laine 8 m²',
     additionalCharge: 0,
     contactIds: ['ct5'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: 'FAC-202404-0001',
     invoiceVatEnabled: true,
@@ -1601,6 +1607,7 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Citadine de prêt',
     additionalCharge: 0,
     contactIds: ['ct7'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
@@ -1622,6 +1629,7 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Convertible 3 places',
     additionalCharge: 0,
     contactIds: ['ct8'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
@@ -2557,6 +2565,7 @@ export const useAppData = create<AppState>((set, get) => ({
       optionOverrides: overrides,
       additionalCharge: payload.additionalCharge ?? 0,
       contactIds: payload.contactIds ?? [],
+      assignedUserIds: payload.assignedUserIds ? [...payload.assignedUserIds] : [],
       sendHistory: payload.sendHistory ?? [],
       invoiceNumber: payload.invoiceNumber ?? null,
       invoiceVatEnabled:
@@ -2607,6 +2616,10 @@ export const useAppData = create<AppState>((set, get) => ({
             updates.additionalCharge !== undefined ? updates.additionalCharge : engagement.additionalCharge,
           contactIds: updates.contactIds ? [...updates.contactIds] : engagement.contactIds,
           sendHistory: updates.sendHistory ? [...updates.sendHistory] : engagement.sendHistory,
+          assignedUserIds:
+            updates.assignedUserIds !== undefined
+              ? [...(updates.assignedUserIds ?? [])]
+              : engagement.assignedUserIds,
           quoteNumber: updates.quoteNumber !== undefined ? updates.quoteNumber : engagement.quoteNumber,
           quoteStatus: updates.quoteStatus !== undefined ? updates.quoteStatus : engagement.quoteStatus,
           mobileDurationMinutes:

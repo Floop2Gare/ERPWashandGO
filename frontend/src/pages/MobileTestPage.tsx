@@ -20,7 +20,7 @@ import { generateInvoicePdf } from '../lib/invoice';
 
 const TIMER_STORAGE_KEY = 'washandgo-mobile-timer-state';
 
-type MobileView = 'services' | 'create' | 'details' | 'timer' | 'invoice';
+type MobileView = 'services' | 'planning' | 'create' | 'details' | 'timer' | 'invoice';
 
 type TimerState = {
   engagementId: string;
@@ -32,6 +32,16 @@ type TimerState = {
 const supportTypes: SupportType[] = ['Voiture', 'Canapé', 'Textile'];
 
 type ServiceFilter = 'all' | 'upcoming' | 'done';
+
+type CalendarEvent = {
+  id: string;
+  engagement: Engagement;
+  service: Service | null;
+  client: Client | null;
+  start: Date;
+  end: Date;
+  durationMinutes: number;
+};
 
 const statusLabels: Record<EngagementStatus, string> = {
   brouillon: 'Brouillon',
@@ -134,6 +144,15 @@ const formatListDate = (isoDate: string) => {
 
 const isValidEmail = (value: string) =>
   /^(?:[\w.!#$%&'*+/=?^`{|}~-]+@(?:[\w-]+\.)+[\w-]{2,})$/.test(value.trim());
+
+const isValidDate = (date: Date) => !Number.isNaN(date.getTime());
+
+const escapeIcsText = (value: string) =>
+  value
+    .replace(/\\/g, '\\\\')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
 
 const MobileLoginView = ({ onLogin }: { onLogin: (username: string, password: string) => boolean }) => {
   const [username, setUsername] = useState('');
@@ -254,6 +273,98 @@ const MobileTestPage = () => {
     }, delay);
   };
 
+  const activeTab: 'services' | 'planning' = view === 'planning' ? 'planning' : 'services';
+
+  const toCalendarTimestamp = (date: Date) =>
+    date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const buildCalendarMetadata = (event: CalendarEvent) => {
+    const serviceName = event.service?.name ?? 'Service Wash&Go';
+    const clientName = event.client?.name ?? 'Client Wash&Go';
+    const supportLabel = event.engagement.supportDetail
+      ? `${event.engagement.supportType} · ${event.engagement.supportDetail}`
+      : event.engagement.supportType;
+    const durationLabel = formatDuration(event.durationMinutes);
+    const description = [serviceName, clientName, `Support: ${supportLabel}`, `Durée estimée: ${durationLabel}`]
+      .filter(Boolean)
+      .join('\n');
+    const locationParts = event.client
+      ? [event.client.address, event.client.city].filter((part) => Boolean(part && part.trim()))
+      : [];
+    return {
+      title: `${serviceName} – ${clientName}`,
+      description,
+      location: locationParts.join(', '),
+    };
+  };
+
+  const handleAddToGoogleCalendar = (event: CalendarEvent) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const { title, description, location } = buildCalendarMetadata(event);
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: title,
+      dates: `${toCalendarTimestamp(event.start)}/${toCalendarTimestamp(event.end)}`,
+      details: description,
+    });
+    if (location) {
+      params.set('location', location);
+    }
+    const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
+  const handleDownloadCalendarFile = (event: CalendarEvent) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const { title, description, location } = buildCalendarMetadata(event);
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Wash&Go//Mobile//FR',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${event.id}@washandgo.app`,
+      `DTSTAMP:${toCalendarTimestamp(new Date())}`,
+      `DTSTART:${toCalendarTimestamp(event.start)}`,
+      `DTEND:${toCalendarTimestamp(event.end)}`,
+      `SUMMARY:${escapeIcsText(title)}`,
+      `DESCRIPTION:${escapeIcsText(description)}`,
+    ];
+    if (location) {
+      lines.push(`LOCATION:${escapeIcsText(location)}`);
+    }
+    lines.push('END:VEVENT', 'END:VCALENDAR');
+    const blob = new Blob([lines.join('\r\n')], {
+      type: 'text/calendar;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${event.id}-washandgo.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 2000);
+  };
+
+  const handleSelectServicesTab = () => {
+    setSelectedEngagementId(null);
+    setView('services');
+    scheduleScrollTo('mobile-services-section');
+  };
+
+  const handleSelectPlanningTab = () => {
+    setSelectedEngagementId(null);
+    setView('planning');
+    scheduleScrollTo('mobile-planning-section');
+  };
+
   const clientsById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
   const servicesById = useMemo(() => new Map(services.map((service) => [service.id, service])), [services]);
   const documentsByEngagementNumber = useMemo(() => {
@@ -266,13 +377,15 @@ const MobileTestPage = () => {
     return index;
   }, [documents]);
 
-  const serviceEngagements = useMemo(
-    () =>
-      engagements
-        .filter((engagement) => engagement.kind === 'service')
-        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
-    [engagements]
-  );
+  const serviceEngagements = useMemo(() => {
+    const base = engagements.filter((engagement) => engagement.kind === 'service');
+    const filtered = currentUserId
+      ? base.filter((engagement) => (engagement.assignedUserIds ?? []).includes(currentUserId))
+      : base;
+    return [...filtered].sort(
+      (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()
+    );
+  }, [currentUserId, engagements]);
 
   const filteredServiceEngagements = useMemo(() => {
     if (serviceFilter === 'upcoming') {
@@ -323,6 +436,57 @@ const MobileTestPage = () => {
     }),
     [serviceMetrics]
   );
+
+  const planningEvents = useMemo(() => {
+    const baseline = serviceEngagements
+      .map((engagement) => {
+        const start = new Date(engagement.scheduledAt);
+        if (!isValidDate(start)) {
+          return null;
+        }
+        const totals = computeEngagementTotals(engagement);
+        const durationMinutes = totals.duration > 0 ? totals.duration : 60;
+        const end = new Date(start.getTime() + durationMinutes * 60000);
+        return {
+          id: engagement.id,
+          engagement,
+          service: servicesById.get(engagement.serviceId) ?? null,
+          client: clientsById.get(engagement.clientId) ?? null,
+          start,
+          end,
+          durationMinutes,
+        } as CalendarEvent;
+      })
+      .filter((event): event is CalendarEvent => Boolean(event));
+
+    return [...baseline].sort((a, b) => a.start.getTime() - b.start.getTime());
+  }, [clientsById, computeEngagementTotals, serviceEngagements, servicesById]);
+
+  const planningDays = useMemo(() => {
+    const groups = new Map<
+      string,
+      { date: Date; label: string; iso: string; events: CalendarEvent[] }
+    >();
+
+    planningEvents.forEach((event) => {
+      const key = formatDateFn(event.start, 'yyyy-MM-dd');
+      if (!groups.has(key)) {
+        groups.set(key, {
+          date: new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate()),
+          iso: key,
+          label: formatDateFn(event.start, 'EEEE d MMMM', { locale: fr }),
+          events: [],
+        });
+      }
+      groups.get(key)?.events.push(event);
+    });
+
+    return Array.from(groups.values()).sort(
+      (a, b) => a.date.getTime() - b.date.getTime()
+    );
+  }, [planningEvents]);
+
+  const planningEventCount = planningEvents.length;
 
   const selectedEngagement = selectedEngagementId
     ? engagements.find((engagement) => engagement.id === selectedEngagementId) ?? null
@@ -565,11 +729,12 @@ const MobileTestPage = () => {
         companyId: company.id,
         kind: 'service',
         supportType: createSupportType,
-        supportDetail: createSupportDetail.trim(),
-        additionalCharge: 0,
-        contactIds,
-        sendHistory: [],
-        invoiceNumber: null,
+      supportDetail: createSupportDetail.trim(),
+      additionalCharge: 0,
+      contactIds,
+      assignedUserIds: currentUserId ? [currentUserId] : [],
+      sendHistory: [],
+      invoiceNumber: null,
         invoiceVatEnabled: null,
         quoteNumber: null,
         quoteStatus: null,
@@ -727,6 +892,113 @@ const MobileTestPage = () => {
             </div>
           ) : null}
         </div>
+      </section>
+    );
+  };
+
+  const renderPlanning = () => {
+    const todayIso = formatDateFn(new Date(), 'yyyy-MM-dd');
+    return (
+      <section className="mobile-section mobile-section--stacked" id="mobile-planning-section">
+        <div className="mobile-section__header mobile-section__header--split">
+          <div>
+            <h1>Planning personnel</h1>
+            <p className="mobile-section__subtitle mobile-section__subtitle--soft">
+              {planningEventCount
+                ? `${planningEventCount} prestation${planningEventCount > 1 ? 's' : ''} planifiée${
+                    planningEventCount > 1 ? 's' : ''
+                  }`
+                : 'Aucune prestation assignée'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="mobile-button mobile-button--ghost"
+            onClick={handleSelectServicesTab}
+          >
+            Voir la liste
+          </button>
+        </div>
+        {planningDays.length ? (
+          <div className="mobile-planning">
+            {planningDays.map((day) => {
+              const isToday = todayIso === day.iso;
+              return (
+                <article
+                  key={day.iso}
+                  className={`mobile-planning__day${isToday ? ' mobile-planning__day--today' : ''}`}
+                >
+                  <header className="mobile-planning__day-header">
+                    <span className="mobile-planning__day-label">{day.label}</span>
+                    <span className="mobile-planning__day-count">
+                      {day.events.length} intervention{day.events.length > 1 ? 's' : ''}
+                    </span>
+                  </header>
+                  <ul className="mobile-planning__list">
+                    {day.events.map((event) => {
+                      const startLabel = formatDateFn(event.start, 'HH:mm');
+                      const endLabel = formatDateFn(event.end, 'HH:mm');
+                      const serviceName = event.service?.name ?? 'Service';
+                      const clientName = event.client?.name ?? 'Client';
+                      const supportLabel = event.engagement.supportDetail
+                        ? `${event.engagement.supportType} · ${event.engagement.supportDetail}`
+                        : event.engagement.supportType;
+                      const statusIntent = getStatusIntent(event.engagement.status);
+                      return (
+                        <li
+                          key={event.id}
+                          className={`mobile-planning__item mobile-planning__item--${statusIntent}`}
+                        >
+                          <div className="mobile-planning__time" aria-hidden="true">
+                            <span>{startLabel}</span>
+                            <span>{endLabel}</span>
+                          </div>
+                          <div className="mobile-planning__content">
+                            <div className="mobile-planning__titles">
+                              <p className="mobile-planning__service">{serviceName}</p>
+                              <p className="mobile-planning__client">{clientName}</p>
+                            </div>
+                            <p className="mobile-planning__support">{supportLabel}</p>
+                            <div className="mobile-planning__actions">
+                              <button
+                                type="button"
+                                className="mobile-button mobile-button--ghost"
+                                onClick={() => handleServiceCardPress(event.engagement)}
+                              >
+                                Ouvrir
+                              </button>
+                              <div className="mobile-planning__calendar">
+                                <button
+                                  type="button"
+                                  className="mobile-chip-button"
+                                  onClick={() => handleAddToGoogleCalendar(event)}
+                                >
+                                  Google Agenda
+                                </button>
+                                <button
+                                  type="button"
+                                  className="mobile-chip-button"
+                                  onClick={() => handleDownloadCalendarFile(event)}
+                                >
+                                  Ajouter au calendrier
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mobile-card mobile-card--empty">
+            <p>Aucune prestation assignée prochainement.</p>
+            <p className="mobile-card__meta">Planifiez un service depuis l’onglet Services.</p>
+          </div>
+        )}
       </section>
     );
   };
@@ -1350,8 +1622,29 @@ const MobileTestPage = () => {
           </button>
         </div>
       </header>
+      <nav className="mobile-tabs" role="tablist" aria-label="Navigation mobile">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'services'}
+          className={`mobile-tab${activeTab === 'services' ? ' mobile-tab--active' : ''}`}
+          onClick={handleSelectServicesTab}
+        >
+          Services
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'planning'}
+          className={`mobile-tab${activeTab === 'planning' ? ' mobile-tab--active' : ''}`}
+          onClick={handleSelectPlanningTab}
+        >
+          Planning
+        </button>
+      </nav>
       <main className="mobile-app__main">
         {view === 'services' && renderServices()}
+        {view === 'planning' && renderPlanning()}
         {view === 'create' && renderCreate()}
         {view === 'details' && selectedEngagement ? renderDetails(selectedEngagement) : null}
         {view === 'timer' && selectedEngagement && timerState ? renderTimerView(selectedEngagement) : null}
