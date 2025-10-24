@@ -7,6 +7,7 @@ import {
   endOfMonth,
   endOfWeek,
   format,
+  formatDistanceToNow,
   isSameDay,
   isSameMonth,
   startOfMonth,
@@ -16,8 +17,10 @@ import { fr } from 'date-fns/locale';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAppData } from '../store/useAppData';
-import type { EngagementStatus } from '../store/useAppData';
+import type { AuthUser, EngagementStatus } from '../store/useAppData';
 import { BRAND_NAME } from '../lib/branding';
+import { useGoogleCalendarEvents } from '../hooks/useGoogleCalendarEvents';
+import { resolveCalendarKeyForUser } from '../lib/calendar';
 
 const parseTimeToMinutes = (time: string) => {
   const [hours, minutes] = time.split('h');
@@ -36,6 +39,18 @@ const planningTestDefinitions: { start: string; end: string; status: EngagementS
   { start: '14h00', end: '16h00', status: 'envoyé' },
 ];
 
+const mapCalendarStatusToEngagementStatus = (status: string | null | undefined): EngagementStatus => {
+  switch (status) {
+    case 'cancelled':
+      return 'annulé';
+    case 'tentative':
+      return 'envoyé';
+    case 'confirmed':
+    default:
+      return 'planifié';
+  }
+};
+
 const getSlotToneClasses = (status: EngagementStatus | undefined) => {
   switch (status) {
     case 'planifié':
@@ -52,11 +67,53 @@ const getSlotToneClasses = (status: EngagementStatus | undefined) => {
 };
 
 const PlanningPage = () => {
-  const { slots, engagements, clients, services } = useAppData();
+  const slots = useAppData((state) => state.slots);
+  const engagements = useAppData((state) => state.engagements);
+  const clients = useAppData((state) => state.clients);
+  const services = useAppData((state) => state.services);
+  const authUsers = useAppData((state) => state.authUsers);
+  const currentUserId = useAppData((state) => state.currentUserId);
   const location = useLocation();
   const [view, setView] = useState<'mois' | 'semaine' | 'jour'>('mois');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
+
+  const currentUser: AuthUser | null = useMemo(() => {
+    if (!currentUserId) {
+      return null;
+    }
+    return authUsers.find((user) => user.id === currentUserId && user.active) ?? null;
+  }, [authUsers, currentUserId]);
+
+  const calendarKey = resolveCalendarKeyForUser(currentUser);
+
+  const {
+    events: googleEvents,
+    slots: googleSlots,
+    eventsBySlotId,
+    loading: calendarLoading,
+    error: calendarError,
+    fetchedAt: calendarFetchedAt,
+    warnings: calendarWarnings,
+    refresh: refreshCalendar,
+  } = useGoogleCalendarEvents({
+    userKey: calendarKey,
+    rangeDays: 60,
+    pastDays: 7,
+  });
+
+  const baseSlots = googleSlots.length > 0 ? googleSlots : slots;
+
+  const calendarLastSyncLabel = useMemo(() => {
+    if (!calendarFetchedAt) {
+      return null;
+    }
+    const parsed = new Date(calendarFetchedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return formatDistanceToNow(parsed, { addSuffix: true, locale: fr });
+  }, [calendarFetchedAt]);
 
   const engagementsById = useMemo(
     () => new Map(engagements.map((engagement) => [engagement.id, engagement])),
@@ -67,7 +124,7 @@ const PlanningPage = () => {
 
   const { effectiveSlots, slotStatusOverrides } = useMemo(() => {
     const overrides = new Map<string, EngagementStatus>();
-    const resolvedSlots = [...slots];
+    const resolvedSlots = [...baseSlots];
     if (!planningTestDate || planningTestDefinitions.length === 0) {
       return { effectiveSlots: resolvedSlots, slotStatusOverrides: overrides };
     }
@@ -90,7 +147,7 @@ const PlanningPage = () => {
     });
 
     return { effectiveSlots: resolvedSlots, slotStatusOverrides: overrides };
-  }, [slots, engagements]);
+  }, [baseSlots, engagements]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -214,6 +271,48 @@ const PlanningPage = () => {
           </div>
         }
       >
+        <div className="mb-6 flex flex-col gap-3 text-xs text-slate-500 dark:text-slate-400 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-1">
+            <span>
+              {calendarLoading
+                ? 'Synchronisation Google Agenda en cours…'
+                : googleSlots.length > 0
+                  ? `Synchronisé avec Google Agenda${
+                      calendarLastSyncLabel ? ` · ${calendarLastSyncLabel}` : ''
+                    }`
+                  : 'Aucune donnée Google Agenda reçue'}
+            </span>
+            {calendarError ? (
+              <span className="font-semibold text-rose-600 dark:text-rose-400">{calendarError}</span>
+            ) : null}
+            {!calendarError && calendarWarnings.length > 0 ? (
+              <ul className="space-y-1 text-[11px]">
+                {calendarWarnings.map((warning) => (
+                  <li key={warning} className="flex items-start gap-1">
+                    <span aria-hidden="true">•</span>
+                    <span>{warning}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            <Button
+              type="button"
+              size="xs"
+              variant="secondary"
+              disabled={calendarLoading}
+              onClick={refreshCalendar}
+            >
+              {calendarLoading ? 'Actualisation…' : 'Rafraîchir'}
+            </Button>
+            {googleEvents.length > 0 ? (
+              <span className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-[11px] font-semibold text-primary">
+                {googleEvents.length} événement{googleEvents.length > 1 ? 's' : ''}
+              </span>
+            ) : null}
+          </div>
+        </div>
         {view === 'mois' && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
@@ -277,6 +376,7 @@ const PlanningPage = () => {
                                   : undefined;
                                 const service = engagement ? servicesById.get(engagement.serviceId) : undefined;
                                 const client = engagement ? clientsById.get(engagement.clientId) : undefined;
+                                const calendarEvent = eventsBySlotId.get(slot.id);
                                 const optionLabels =
                                   engagement && service
                                     ? engagement.optionIds
@@ -285,22 +385,31 @@ const PlanningPage = () => {
                                     : [];
                                 const primaryOption = optionLabels[0];
                                 const additionalOptions = Math.max(optionLabels.length - 1, 0);
+                                const baseServiceLabel = service?.name ?? calendarEvent?.summary ?? 'Prestation';
                                 const prestationLabel =
                                   primaryOption
                                     ? `${primaryOption}${additionalOptions > 0 ? ` (+${additionalOptions})` : ''}`
-                                    : service?.name ?? client?.name ?? 'Prestation';
-                                const slotStatus = slotStatusOverrides.get(slot.id) ?? engagement?.status;
+                                    : baseServiceLabel;
+                                const slotStatus =
+                                  slotStatusOverrides.get(slot.id) ??
+                                  (engagement
+                                    ? engagement.status
+                                    : mapCalendarStatusToEngagementStatus(calendarEvent?.status ?? null));
                                 const toneClasses = getSlotToneClasses(slotStatus);
                                 const tooltipParts = [
-                                  prestationLabel,
-                                  client?.name,
+                                  baseServiceLabel,
+                                  client?.name ?? calendarEvent?.location,
                                   `${slot.start} – ${slot.end}`,
-                                ].filter(Boolean);
+                                ];
+                                if (calendarEvent?.description) {
+                                  tooltipParts.push(calendarEvent.description);
+                                }
+                                const filteredTooltip = tooltipParts.filter(Boolean) as string[];
                                 return (
                                   <div
                                     key={slot.id}
                                     className={`flex items-center gap-2 rounded-md border px-2 py-1 text-[11px] leading-tight ${toneClasses}`}
-                                    title={tooltipParts.join(' • ')}
+                                    title={filteredTooltip.join(' • ')}
                                   >
                                     <span className="whitespace-nowrap font-semibold">{slot.start}</span>
                                     <span className="truncate font-medium">{prestationLabel}</span>
@@ -386,17 +495,28 @@ const PlanningPage = () => {
                               const engagement = engagements.find((item) => item.id === slot.engagementId);
                               const client = clients.find((item) => item.id === engagement?.clientId);
                               const service = services.find((item) => item.id === engagement?.serviceId);
+                              const calendarEvent = eventsBySlotId.get(slot.id);
                               const startMinutes = parseTimeToMinutes(slot.start);
                               const endMinutes = parseTimeToMinutes(slot.end);
                               const offsetMinutes = hourBounds.minHour * 60;
                               const top = ((startMinutes - offsetMinutes) / 60) * slotHeight;
                               const height = Math.max(((endMinutes - startMinutes) / 60) * slotHeight, slotHeight / 1.5);
                               const statusOverride = slotStatusOverrides.get(slot.id);
-                              const slotStatus = statusOverride ?? engagement?.status;
+                              const slotStatus =
+                                statusOverride ??
+                                (engagement
+                                  ? engagement.status
+                                  : mapCalendarStatusToEngagementStatus(calendarEvent?.status ?? null));
                               const toneClasses = getSlotToneClasses(slotStatus);
-                              const labelParts = [service?.name, client?.name].filter(Boolean);
-                              const slotLabel = labelParts.length > 0 ? labelParts.join(' – ') : `Créneau ${BRAND_NAME}`;
-                              const slotTitle = `${slotLabel} • ${slot.start} – ${slot.end}`;
+                              const baseLabel = service?.name ?? calendarEvent?.summary ?? `Créneau ${BRAND_NAME}`;
+                              const detailLabel = client?.name ?? calendarEvent?.location;
+                              const labelParts = [baseLabel, detailLabel].filter(Boolean) as string[];
+                              const slotLabel = labelParts.length > 0 ? labelParts.join(' – ') : baseLabel;
+                              const titleParts = [slotLabel, `${slot.start} – ${slot.end}`];
+                              if (calendarEvent?.description) {
+                                titleParts.push(calendarEvent.description);
+                              }
+                              const slotTitle = titleParts.join(' • ');
                               return (
                                 <div
                                   key={slot.id}
@@ -447,11 +567,22 @@ const PlanningPage = () => {
                   const client = clients.find((item) => item.id === engagement?.clientId);
                   const service = services.find((item) => item.id === engagement?.serviceId);
                   const statusOverride = slotStatusOverrides.get(slot.id);
-                  const slotStatus = statusOverride ?? engagement?.status;
+                  const calendarEvent = eventsBySlotId.get(slot.id);
+                  const slotStatus =
+                    statusOverride ??
+                    (engagement
+                      ? engagement.status
+                      : mapCalendarStatusToEngagementStatus(calendarEvent?.status ?? null));
                   const toneClasses = getSlotToneClasses(slotStatus);
-                  const labelParts = [service?.name, client?.name].filter(Boolean);
-                  const slotLabel = labelParts.length > 0 ? labelParts.join(' – ') : `Créneau ${BRAND_NAME}`;
-                  const slotTitle = `${slotLabel} • ${slot.start} – ${slot.end}`;
+                  const baseLabel = service?.name ?? calendarEvent?.summary ?? `Créneau ${BRAND_NAME}`;
+                  const detailLabel = client?.name ?? calendarEvent?.location;
+                  const labelParts = [baseLabel, detailLabel].filter(Boolean) as string[];
+                  const slotLabel = labelParts.length > 0 ? labelParts.join(' – ') : baseLabel;
+                  const titleParts = [slotLabel, `${slot.start} – ${slot.end}`];
+                  if (calendarEvent?.description) {
+                    titleParts.push(calendarEvent.description);
+                  }
+                  const slotTitle = titleParts.join(' • ');
                   return (
                     <div
                       key={slot.id}
@@ -465,7 +596,7 @@ const PlanningPage = () => {
                         </p>
                       </div>
                       <div className="text-left text-[12px] md:text-right">
-                        <p className="font-medium">{client?.name ?? 'Client à confirmer'}</p>
+                        <p className="font-medium">{client?.name ?? calendarEvent?.location ?? 'Client à confirmer'}</p>
                         <p className="text-[11px] opacity-80">{new Date(slot.date).toLocaleDateString('fr-FR')}</p>
                       </div>
                     </div>
