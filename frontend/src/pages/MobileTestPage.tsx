@@ -230,6 +230,7 @@ const MobileTestPage = () => {
   const [createSupportDetail, setCreateSupportDetail] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingService, setIsCreatingService] = useState(false);
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
 
   const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [displayElapsed, setDisplayElapsed] = useState(0);
@@ -282,6 +283,25 @@ const MobileTestPage = () => {
     }
     return serviceEngagements;
   }, [serviceEngagements, serviceFilter]);
+
+  const visibleServiceEngagements = useMemo(() => {
+    const query = serviceSearchTerm.trim().toLowerCase();
+    if (!query) {
+      return filteredServiceEngagements;
+    }
+    return filteredServiceEngagements.filter((engagement) => {
+      const clientName = clientsById.get(engagement.clientId)?.name?.toLowerCase() ?? '';
+      const serviceName = servicesById.get(engagement.serviceId)?.name?.toLowerCase() ?? '';
+      const supportLabel = engagement.supportDetail
+        ? `${engagement.supportType} ${engagement.supportDetail}`.toLowerCase()
+        : engagement.supportType.toLowerCase();
+      const statusLabel = statusLabels[engagement.status]?.toLowerCase() ?? '';
+      const haystacks = [clientName, serviceName, supportLabel, statusLabel].filter(Boolean);
+      return haystacks.some((value) => value.includes(query));
+    });
+  }, [clientsById, filteredServiceEngagements, serviceSearchTerm, servicesById]);
+
+  const serviceResultsCount = visibleServiceEngagements.length;
 
   const serviceMetrics = useMemo(() => {
     const planned = serviceEngagements.filter((engagement) => engagement.status === 'planifié').length;
@@ -504,34 +524,9 @@ const MobileTestPage = () => {
   const isDarkTheme = theme === 'dark';
   const themeToggleGlyph = isDarkTheme ? '☾' : '☀︎';
   const themeToggleLabel = isDarkTheme ? 'Basculer en mode clair' : 'Basculer en mode sombre';
-  const canQuickStart = Boolean(
-    selectedEngagement ?? nextRunnableEngagement ?? timerState ?? serviceEngagements.length
-  );
-
-  const handleQuickCreateTap = () => {
-    if (view !== 'create') {
-      setView('create');
-      scheduleScrollTo('mobile-create-section');
-      return;
-    }
+  const handleHeroCreateTap = () => {
+    setView('create');
     scheduleScrollTo('mobile-create-section');
-  };
-
-  const handleQuickStartTap = () => {
-    const target = selectedEngagement ?? nextRunnableEngagement ?? filteredServiceEngagements[0] ?? null;
-    if (!target) {
-      setView('services');
-      scheduleScrollTo('mobile-services-section');
-      return;
-    }
-    if (timerState && timerState.engagementId === target.id) {
-      setView('timer');
-      scheduleScrollTo('mobile-timer-section');
-      return;
-    }
-    setSelectedEngagementId(target.id);
-    setView('details');
-    scheduleScrollTo('mobile-details-section');
   };
 
   const handleCreateService = (event: FormEvent<HTMLFormElement>) => {
@@ -599,6 +594,22 @@ const MobileTestPage = () => {
     setSelectedEngagementId(null);
   };
 
+  const handleServiceCardPress = (engagement: Engagement) => {
+    const isAlreadyFocused = selectedEngagementId === engagement.id && view === 'details';
+    const runnable = engagement.status === 'planifié' || engagement.status === 'envoyé';
+    if (isAlreadyFocused && runnable && (!timerState || timerState.engagementId === engagement.id)) {
+      if (engagement.status === 'planifié') {
+        updateEngagement(engagement.id, { status: 'envoyé' });
+      }
+      handleStartTimer(engagement);
+      scheduleScrollTo('mobile-timer-section');
+      return;
+    }
+    setSelectedEngagementId(engagement.id);
+    setView('details');
+    scheduleScrollTo('mobile-details-section');
+  };
+
   const renderServices = () => {
     const filterOptions: { key: ServiceFilter; label: string }[] = [
       { key: 'all', label: 'Tous' },
@@ -615,6 +626,13 @@ const MobileTestPage = () => {
             <p className="mobile-intro__subtitle">{heroSubtitle}</p>
           </div>
           <div className="mobile-intro__actions">
+            <button
+              type="button"
+              className="mobile-button mobile-button--primary mobile-intro__cta"
+              onClick={handleHeroCreateTap}
+            >
+              Créer un service
+            </button>
             <span className="mobile-intro__clock" aria-label={`Heure actuelle ${timeLabel}`}>
               {timeLabel}
             </span>
@@ -637,11 +655,34 @@ const MobileTestPage = () => {
             ))}
           </div>
           <span className="mobile-filter-row__count">
-            {filterCounts[serviceFilter]} résultat{filterCounts[serviceFilter] > 1 ? 's' : ''}
+            {serviceResultsCount} résultat{serviceResultsCount > 1 ? 's' : ''}
           </span>
         </div>
+        <div className="mobile-search" role="search">
+          <label className="sr-only" htmlFor="mobile-service-search">
+            Rechercher un service
+          </label>
+          <input
+            id="mobile-service-search"
+            type="search"
+            className="mobile-search__input"
+            placeholder="Rechercher un client, un service ou un support"
+            value={serviceSearchTerm}
+            onChange={(event) => setServiceSearchTerm(event.target.value)}
+          />
+          {serviceSearchTerm ? (
+            <button
+              type="button"
+              className="mobile-search__clear"
+              onClick={() => setServiceSearchTerm('')}
+              aria-label="Effacer la recherche"
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
         <div className="mobile-service-list mobile-service-list--simple">
-          {filteredServiceEngagements.map((engagement) => {
+          {visibleServiceEngagements.map((engagement) => {
             const client = clientsById.get(engagement.clientId);
             const service = servicesById.get(engagement.serviceId);
             const label = service ? service.name : 'Service inconnu';
@@ -651,15 +692,13 @@ const MobileTestPage = () => {
             const supportLabel = engagement.supportDetail
               ? `${engagement.supportType} · ${engagement.supportDetail}`
               : engagement.supportType;
+            const runnable = engagement.status === 'planifié' || engagement.status === 'envoyé';
             return (
               <button
                 key={engagement.id}
                 type="button"
                 className={`mobile-service-card mobile-service-card--${statusIntent}`}
-                onClick={() => {
-                  setSelectedEngagementId(engagement.id);
-                  setView('details');
-                }}
+                onClick={() => handleServiceCardPress(engagement)}
               >
                 <div className="mobile-service-card__line">
                   <p className="mobile-service-card__client">{clientLabel}</p>
@@ -675,10 +714,13 @@ const MobileTestPage = () => {
                   </span>
                 </div>
                 <p className="mobile-service-card__note">{supportLabel}</p>
+                {runnable ? (
+                  <span className="mobile-service-card__hint">Touchez à nouveau pour démarrer</span>
+                ) : null}
               </button>
             );
           })}
-          {!filteredServiceEngagements.length ? (
+          {!visibleServiceEngagements.length ? (
             <div className="mobile-card mobile-card--empty">
               <h2>Aucun service</h2>
               <p>Adaptez les filtres ou créez votre première intervention.</p>
@@ -1323,25 +1365,6 @@ const MobileTestPage = () => {
           </div>
         ) : null}
       </main>
-      <footer className="mobile-action-bar" role="toolbar" aria-label="Actions rapides">
-        <div className="mobile-action-bar__group">
-          <button
-            type="button"
-            className="mobile-button mobile-button--secondary mobile-action-bar__button"
-            onClick={handleQuickCreateTap}
-          >
-            Créer
-          </button>
-          <button
-            type="button"
-            className="mobile-button mobile-button--primary mobile-action-bar__button"
-            onClick={handleQuickStartTap}
-            disabled={!canQuickStart}
-          >
-            Démarrer
-          </button>
-        </div>
-      </footer>
     </div>
   );
 };
