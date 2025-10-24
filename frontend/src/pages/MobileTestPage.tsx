@@ -618,13 +618,6 @@ const MobileTestPage = () => {
             <span className="mobile-intro__clock" aria-label={`Heure actuelle ${timeLabel}`}>
               {timeLabel}
             </span>
-            <button
-              type="button"
-              className="mobile-button mobile-button--primary mobile-intro__cta"
-              onClick={() => setView('create')}
-            >
-              Nouveau service
-            </button>
           </div>
         </div>
         <div className="mobile-filter-row">
@@ -1336,7 +1329,7 @@ const MobileTestPage = () => {
           className="mobile-button mobile-button--secondary mobile-action-bar__button"
           onClick={handleQuickCreateTap}
         >
-          Créer un service
+          Créer
         </button>
         <button
           type="button"
@@ -1344,7 +1337,7 @@ const MobileTestPage = () => {
           onClick={handleQuickStartTap}
           disabled={!canQuickStart}
         >
-          Démarrer un service
+          Démarrer
         </button>
       </footer>
     </div>
