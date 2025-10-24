@@ -1,0 +1,323 @@
+import { SupabaseService } from './supabaseStore'
+import type { 
+  CompanyInsert, 
+  ClientInsert, 
+  ServiceInsert, 
+  ServiceOptionInsert, 
+  EngagementInsert,
+  AuthUserInsert 
+} from './supabaseStore'
+
+/**
+ * Script de migration pour transférer les données mock vers Supabase
+ */
+export class DataMigration {
+  /**
+   * Migre toutes les données initiales vers Supabase
+   */
+  static async migrateAllData(): Promise<void> {
+    console.log('🚀 Début de la migration des données...')
+
+    try {
+      // 1. Migrer les entreprises
+      await this.migrateCompanies()
+      
+      // 2. Migrer les services et options
+      await this.migrateServices()
+      
+      // 3. Migrer les clients
+      await this.migrateClients()
+      
+      // 4. Migrer les engagements
+      await this.migrateEngagements()
+      
+      // 5. Migrer les utilisateurs
+      await this.migrateUsers()
+
+      console.log('✅ Migration terminée avec succès!')
+    } catch (error) {
+      console.error('❌ Erreur lors de la migration:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Migre les entreprises
+   */
+  private static async migrateCompanies(): Promise<void> {
+    console.log('📊 Migration des entreprises...')
+
+    const companies: CompanyInsert[] = [
+      {
+        name: 'Wash&Go Fuveau',
+        logo_url: null,
+        invoice_logo_url: null,
+        address: '123 Avenue de la République',
+        city: 'Fuveau',
+        postal_code: '13710',
+        phone: '+33 4 42 12 34 56',
+        email: 'contact@washandgo-fuveau.fr',
+        siret: '12345678901234',
+        vat_enabled: true,
+        vat_rate: 20.00,
+        is_default: true,
+        bank_name: 'Crédit Agricole',
+        bank_address: 'Avenue de la République, 13710 Fuveau',
+        iban: 'FR76 1234 5678 9012 3456 7890 123',
+        bic: 'AGRIFRPPXXX'
+      }
+    ]
+
+    for (const company of companies) {
+      await SupabaseService.createCompany(company)
+    }
+
+    console.log('✅ Entreprises migrées')
+  }
+
+  /**
+   * Migre les services et leurs options
+   */
+  private static async migrateServices(): Promise<void> {
+    console.log('🔧 Migration des services...')
+
+    const services: ServiceInsert[] = [
+      {
+        category: 'Voiture',
+        name: 'Nettoyage intérieur complet',
+        description: 'Aspiration, dégraissage et protection des surfaces intérieures.',
+        base_price: 120,
+        base_duration: 120,
+        active: true
+      },
+      {
+        category: 'Canapé',
+        name: 'Détachage canapé 3 places',
+        description: 'Nettoyage vapeur et traitement anti-taches.',
+        base_price: 95,
+        base_duration: 90,
+        active: true
+      },
+      {
+        category: 'Textile',
+        name: 'Nettoyage tapis laine',
+        description: 'Aspiration en profondeur et shampoing doux.',
+        base_price: 130,
+        base_duration: 150,
+        active: true
+      }
+    ]
+
+    const serviceOptions: ServiceOptionInsert[] = [
+      // Options pour le service Voiture
+      { service_id: '', label: 'Protection tissus', extra_price: 35, extra_duration: 30 },
+      { service_id: '', label: 'Traitement désodorisant', extra_price: 15, extra_duration: 15 },
+      // Options pour le service Canapé
+      { service_id: '', label: 'Protection imperméabilisante', extra_price: 25, extra_duration: 20 },
+      // Options pour le service Textile
+      { service_id: '', label: 'Traitement anti-acariens', extra_price: 40, extra_duration: 25 },
+      { service_id: '', label: 'Séchage accéléré', extra_price: 20, extra_duration: 15 }
+    ]
+
+    // Créer les services et récupérer leurs IDs
+    const createdServices = []
+    for (const service of services) {
+      const created = await SupabaseService.createService(service)
+      createdServices.push(created)
+    }
+
+    // Créer les options avec les bons service_id
+    const optionMapping = [
+      { serviceIndex: 0, optionCount: 2 }, // Voiture: 2 options
+      { serviceIndex: 1, optionCount: 1 }, // Canapé: 1 option
+      { serviceIndex: 2, optionCount: 2 }  // Textile: 2 options
+    ]
+
+    let optionIndex = 0
+    for (const mapping of optionMapping) {
+      const service = createdServices[mapping.serviceIndex]
+      for (let i = 0; i < mapping.optionCount; i++) {
+        const option = serviceOptions[optionIndex]
+        await SupabaseService.createServiceOption({
+          ...option,
+          service_id: service.id
+        })
+        optionIndex++
+      }
+    }
+
+    console.log('✅ Services migrés')
+  }
+
+  /**
+   * Migre les clients
+   */
+  private static async migrateClients(): Promise<void> {
+    console.log('👥 Migration des clients...')
+
+    const clients: ClientInsert[] = [
+      {
+        type: 'company',
+        name: 'Groupe Horizon',
+        company_name: 'Groupe Horizon',
+        siret: '12345678901234',
+        email: 'contact@groupe-horizon.fr',
+        phone: '+33 5 45 12 32 10',
+        address: '123 Rue de la Paix',
+        city: 'Bordeaux',
+        status: 'Actif',
+        tags: ['Premium', 'Contrat annuel']
+      },
+      {
+        type: 'company',
+        name: 'Wash&Go Nord',
+        company_name: 'Wash&Go Nord',
+        siret: '23456789012345',
+        email: 'support@washandgo-nord.fr',
+        phone: '+33 3 27 84 90 12',
+        address: '456 Avenue du Nord',
+        city: 'Lille',
+        status: 'Actif',
+        tags: ['Industriel']
+      },
+      {
+        type: 'company',
+        name: 'Textiluxe',
+        company_name: 'Textiluxe',
+        siret: '34567890123456',
+        email: 'bonjour@textiluxe.fr',
+        phone: '+33 1 88 91 22 03',
+        address: '789 Boulevard Saint-Germain',
+        city: 'Paris',
+        status: 'Prospect',
+        tags: ['Retail']
+      }
+    ]
+
+    for (const client of clients) {
+      await SupabaseService.createClient(client)
+    }
+
+    console.log('✅ Clients migrés')
+  }
+
+  /**
+   * Migre les engagements
+   */
+  private static async migrateEngagements(): Promise<void> {
+    console.log('📅 Migration des engagements...')
+
+    // Récupérer les IDs des entreprises et clients créés
+    const companies = await SupabaseService.getCompanies()
+    const clients = await SupabaseService.getClients()
+    const services = await SupabaseService.getServices()
+
+    if (companies.length === 0 || clients.length === 0 || services.length === 0) {
+      throw new Error('Données de base manquantes pour créer les engagements')
+    }
+
+    const engagements: EngagementInsert[] = [
+      {
+        client_id: clients[0].id,
+        service_id: services[0].id,
+        option_ids: [], // À adapter selon les options créées
+        scheduled_at: new Date('2024-04-09T09:00:00Z').toISOString(),
+        status: 'planifié',
+        company_id: companies[0].id,
+        kind: 'service',
+        support_type: 'Voiture',
+        support_detail: 'Berline de fonction',
+        additional_charge: 0,
+        contact_ids: [],
+        assigned_user_ids: []
+      },
+      {
+        client_id: clients[1].id,
+        service_id: services[1].id,
+        option_ids: [],
+        scheduled_at: new Date('2024-04-09T13:30:00Z').toISOString(),
+        status: 'planifié',
+        company_id: companies[0].id,
+        kind: 'service',
+        support_type: 'Canapé',
+        support_detail: 'Canapé 3 places cuir',
+        additional_charge: 0,
+        contact_ids: [],
+        assigned_user_ids: []
+      },
+      {
+        client_id: clients[2].id,
+        service_id: services[2].id,
+        option_ids: [],
+        scheduled_at: new Date('2024-04-08T17:30:00Z').toISOString(),
+        status: 'réalisé',
+        company_id: companies[0].id,
+        kind: 'facture',
+        support_type: 'Textile',
+        support_detail: 'Tapis laine 8 m²',
+        additional_charge: 0,
+        contact_ids: [],
+        assigned_user_ids: [],
+        mobile_duration_minutes: 75,
+        mobile_completion_comment: 'Service terminé avec succès'
+      }
+    ]
+
+    for (const engagement of engagements) {
+      await SupabaseService.createEngagement(engagement)
+    }
+
+    console.log('✅ Engagements migrés')
+  }
+
+  /**
+   * Migre les utilisateurs
+   */
+  private static async migrateUsers(): Promise<void> {
+    console.log('👤 Migration des utilisateurs...')
+
+    const users: AuthUserInsert[] = [
+      {
+        username: 'admin',
+        password_hash: 'hashed_password_here', // À hasher avec bcrypt
+        role: 'superAdmin',
+        pages: ['*'],
+        permissions: ['*'],
+        active: true
+      },
+      {
+        username: 'manager',
+        password_hash: 'hashed_password_here',
+        role: 'manager',
+        pages: ['dashboard', 'clients', 'leads', 'service', 'planning', 'stats'],
+        permissions: [
+          'service.create', 'service.edit', 'service.duplicate', 'service.invoice', 'service.print', 'service.email',
+          'lead.edit', 'lead.contact', 'lead.convert',
+          'client.edit', 'client.contact.add', 'client.invoice', 'client.quote', 'client.email',
+          'documents.view', 'documents.edit', 'documents.send',
+          'settings.profile', 'settings.companies', 'settings.signatures', 'settings.catalog'
+        ],
+        active: true
+      }
+    ]
+
+    for (const user of users) {
+      await SupabaseService.createAuthUser(user)
+    }
+
+    console.log('✅ Utilisateurs migrés')
+  }
+
+  /**
+   * Vérifie si la migration a déjà été effectuée
+   */
+  static async isMigrationNeeded(): Promise<boolean> {
+    try {
+      const companies = await SupabaseService.getCompanies()
+      return companies.length === 0
+    } catch (error) {
+      console.error('Erreur lors de la vérification de la migration:', error)
+      return true
+    }
+  }
+}

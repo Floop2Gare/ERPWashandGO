@@ -1,0 +1,118 @@
+import { SupabaseService } from './supabaseStore'
+import { DataMigration } from './migration'
+
+/**
+ * Script de test pour vérifier la connexion Supabase
+ */
+export class SupabaseTest {
+  /**
+   * Teste la connexion à Supabase
+   */
+  static async testConnection(): Promise<boolean> {
+    try {
+      console.log('🔌 Test de connexion à Supabase...')
+      
+      const companies = await SupabaseService.getCompanies()
+      console.log(`✅ Connexion réussie! ${companies.length} entreprises trouvées.`)
+      
+      return true
+    } catch (error) {
+      console.error('❌ Erreur de connexion:', error)
+      return false
+    }
+  }
+
+  /**
+   * Teste la création d'une entreprise
+   */
+  static async testCreateCompany(): Promise<boolean> {
+    try {
+      console.log('🏢 Test de création d\'entreprise...')
+      
+      const testCompany = {
+        name: 'Test Company',
+        address: '123 Test Street',
+        city: 'Test City',
+        postal_code: '12345',
+        phone: '+33 1 23 45 67 89',
+        email: 'test@example.com',
+        siret: '12345678901234'
+      }
+
+      const created = await SupabaseService.createCompany(testCompany)
+      console.log('✅ Entreprise créée:', created.id)
+      
+      // Nettoyer
+      await SupabaseService.deleteCompany(created.id)
+      console.log('✅ Entreprise supprimée')
+      
+      return true
+    } catch (error) {
+      console.error('❌ Erreur lors du test de création:', error)
+      return false
+    }
+  }
+
+  /**
+   * Teste la migration complète
+   */
+  static async testMigration(): Promise<boolean> {
+    try {
+      console.log('📊 Test de migration...')
+      
+      const needsMigration = await DataMigration.isMigrationNeeded()
+      if (!needsMigration) {
+        console.log('ℹ️ Migration déjà effectuée')
+        return true
+      }
+
+      await DataMigration.migrateAllData()
+      console.log('✅ Migration testée avec succès')
+      
+      return true
+    } catch (error) {
+      console.error('❌ Erreur lors de la migration:', error)
+      return false
+    }
+  }
+
+  /**
+   * Lance tous les tests
+   */
+  static async runAllTests(): Promise<void> {
+    console.log('🧪 Début des tests Supabase...')
+    
+    const tests = [
+      { name: 'Connexion', fn: () => this.testConnection() },
+      { name: 'Création entreprise', fn: () => this.testCreateCompany() },
+      { name: 'Migration', fn: () => this.testMigration() }
+    ]
+
+    let passed = 0
+    let failed = 0
+
+    for (const test of tests) {
+      try {
+        const result = await test.fn()
+        if (result) {
+          passed++
+        } else {
+          failed++
+        }
+      } catch (error) {
+        console.error(`❌ Test ${test.name} échoué:`, error)
+        failed++
+      }
+    }
+
+    console.log(`\n📊 Résultats des tests:`)
+    console.log(`✅ Réussis: ${passed}`)
+    console.log(`❌ Échoués: ${failed}`)
+    console.log(`📈 Taux de réussite: ${Math.round((passed / (passed + failed)) * 100)}%`)
+  }
+}
+
+// Fonction globale pour lancer les tests depuis la console
+if (typeof window !== 'undefined') {
+  (window as any).testSupabase = SupabaseTest.runAllTests
+}

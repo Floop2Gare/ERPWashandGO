@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Supabase - ERP Wash&Go</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+        }
+        .test-button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background: #1d4ed8;
+        }
+        .test-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+        .info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #3b82f6;
+        }
+        .loading {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+        #results {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 5px;
+            padding: 10px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Supabase - ERP Wash&Go</h1>
+        
+        <div class="test-section">
+            <h3>🔧 Configuration</h3>
+            <p>Vérifiez que vos variables d'environnement sont configurées :</p>
+            <div id="config-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔌 Tests de Connexion</h3>
+            <button class="test-button" onclick="testConnection()">Test Connexion</button>
+            <button class="test-button" onclick="testTables()">Test Tables</button>
+            <button class="test-button" onclick="testCreateData()">Test Création</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Migration des Données</h3>
+            <button class="test-button" onclick="testMigration()">Lancer Migration</button>
+            <button class="test-button" onclick="checkMigration()">Vérifier Migration</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📁 Test Stockage PDF</h3>
+            <button class="test-button" onclick="testPdfStorage()">Test Stockage PDF</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🧹 Nettoyage</h3>
+            <button class="test-button" onclick="cleanupTestData()">Nettoyer Données Test</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Résultats</h3>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Configuration Supabase (à adapter avec vos vraies valeurs)
+        const SUPABASE_URL = 'https://your-project.supabase.co'
+        const SUPABASE_ANON_KEY = 'your-anon-key'
+        
+        // Import dynamique de Supabase
+        let supabase = null
+        
+        async function initSupabase() {
+            try {
+                const { createClient } = await import('https://cdn.skypack.dev/@supabase/supabase-js@2')
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+                return true
+            } catch (error) {
+                log('❌ Erreur import Supabase: ' + error.message, 'error')
+                return false
+            }
+        }
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('results')
+            const div = document.createElement('div')
+            div.className = `result ${type}`
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`
+            results.appendChild(div)
+            results.scrollTop = results.scrollHeight
+        }
+
+        // Test de connexion
+        window.testConnection = async function() {
+            log('🔌 Test de connexion Supabase...', 'loading')
+            
+            if (!supabase) {
+                const initialized = await initSupabase()
+                if (!initialized) return
+            }
+
+            try {
+                const { data, error } = await supabase.from('companies').select('count').limit(1)
+                
+                if (error) {
+                    log('❌ Erreur de connexion: ' + error.message, 'error')
+                } else {
+                    log('✅ Connexion réussie!', 'success')
+                }
+            } catch (error) {
+                log('❌ Erreur: ' + error.message, 'error')
+            }
+        }
+
+        // Test des tables
+        window.testTables = async function() {
+            log('📊 Test des tables...', 'loading')
+            
+            const tables = ['companies', 'clients', 'services', 'engagements', 'auth_users', 'documents']
+            
+            for (const table of tables) {
+                try {
+                    const { data, error } = await supabase.from(table).select('*').limit(1)
+                    
+                    if (error) {
+                        log(`❌ Table ${table}: ${error.message}`, 'error')
+                    } else {
+                        log(`✅ Table ${table}: OK`, 'success')
+                    }
+                } catch (error) {
+                    log(`❌ Table ${table}: ${error.message}`, 'error')
+                }
+            }
+        }
+
+        // Test de création de données
+        window.testCreateData = async function() {
+            log('🏢 Test de création d\'entreprise...', 'loading')
+            
+            try {
+                const testCompany = {
+                    name: 'Test Company ' + Date.now(),
+                    address: '123 Test Street',
+                    city: 'Test City',
+                    postal_code: '12345',
+                    phone: '+33 1 23 45 67 89',
+                    email: 'test@example.com',
+                    siret: '12345678901234'
+                }
+
+                const { data, error } = await supabase
+                    .from('companies')
+                    .insert(testCompany)
+                    .select()
+                    .single()
+
+                if (error) {
+                    log('❌ Erreur création: ' + error.message, 'error')
+                } else {
+                    log('✅ Entreprise créée: ' + data.id, 'success')
+                    
+                    // Nettoyer
+                    await supabase.from('companies').delete().eq('id', data.id)
+                    log('✅ Entreprise supprimée', 'success')
+                }
+            } catch (error) {
+                log('❌ Erreur: ' + error.message, 'error')
+            }
+        }
+
+        // Test de migration
+        window.testMigration = async function() {
+            log('📊 Test de migration...', 'loading')
+            
+            try {
+                // Vérifier si migration nécessaire
+                const { data: companies } = await supabase.from('companies').select('id').limit(1)
+                
+                if (companies && companies.length > 0) {
+                    log('ℹ️ Migration déjà effectuée', 'info')
+                    return
+                }
+
+                // Créer des données de test
+                const testData = {
+                    name: 'Wash&Go Fuveau',
+                    address: '123 Avenue de la République',
+                    city: 'Fuveau',
+                    postal_code: '13710',
+                    phone: '+33 4 42 12 34 56',
+                    email: 'contact@washandgo-fuveau.fr',
+                    siret: '12345678901234',
+                    vat_enabled: true,
+                    vat_rate: 20.00,
+                    is_default: true
+                }
+
+                const { data, error } = await supabase
+                    .from('companies')
+                    .insert(testData)
+                    .select()
+                    .single()
+
+                if (error) {
+                    log('❌ Erreur migration: ' + error.message, 'error')
+                } else {
+                    log('✅ Migration testée avec succès: ' + data.id, 'success')
+                }
+            } catch (error) {
+                log('❌ Erreur migration: ' + error.message, 'error')
+            }
+        }
+
+        // Vérifier migration
+        window.checkMigration = async function() {
+            log('🔍 Vérification de la migration...', 'loading')
+            
+            try {
+                const { data: companies } = await supabase.from('companies').select('*')
+                const { data: clients } = await supabase.from('clients').select('*')
+                const { data: services } = await supabase.from('services').select('*')
+                const { data: engagements } = await supabase.from('engagements').select('*')
+
+                log(`📊 Entreprises: ${companies?.length || 0}`, 'info')
+                log(`👥 Clients: ${clients?.length || 0}`, 'info')
+                log(`🔧 Services: ${services?.length || 0}`, 'info')
+                log(`📅 Engagements: ${engagements?.length || 0}`, 'info')
+            } catch (error) {
+                log('❌ Erreur vérification: ' + error.message, 'error')
+            }
+        }
+
+        // Test stockage PDF
+        window.testPdfStorage = async function() {
+            log('📁 Test stockage PDF...', 'loading')
+            
+            try {
+                // Vérifier si le bucket existe
+                const { data, error } = await supabase.storage.from('documents').list()
+                
+                if (error) {
+                    log('❌ Bucket documents non trouvé: ' + error.message, 'error')
+                    log('💡 Créez le bucket "documents" dans Supabase Storage', 'info')
+                } else {
+                    log('✅ Bucket documents accessible', 'success')
+                }
+            } catch (error) {
+                log('❌ Erreur stockage: ' + error.message, 'error')
+            }
+        }
+
+        // Nettoyage
+        window.cleanupTestData = async function() {
+            log('🧹 Nettoyage des données test...', 'loading')
+            
+            try {
+                // Supprimer les entreprises de test
+                const { error } = await supabase
+                    .from('companies')
+                    .delete()
+                    .like('name', 'Test Company%')
+
+                if (error) {
+                    log('❌ Erreur nettoyage: ' + error.message, 'error')
+                } else {
+                    log('✅ Données test nettoyées', 'success')
+                }
+            } catch (error) {
+                log('❌ Erreur: ' + error.message, 'error')
+            }
+        }
+
+        // Vérifier la configuration au chargement
+        window.addEventListener('load', function() {
+            const configStatus = document.getElementById('config-status')
+            
+            if (SUPABASE_URL.includes('your-project')) {
+                configStatus.innerHTML = '<div class="result error">❌ Configurez SUPABASE_URL dans le script</div>'
+            } else {
+                configStatus.innerHTML = '<div class="result success">✅ Configuration détectée</div>'
+            }
+        })
+    </script>
+</body>
+</html>
