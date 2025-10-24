@@ -45,9 +45,13 @@ Thumbs.db
 deploy-vercel.sh
 deploy-vercel.bat
 
-# Documentation
-*.md
-!README.md
+# Documentation (garder les fichiers de déploiement)
+DEPLOY_VERCEL_FINAL.md
+DEPLOYMENT_GUIDE.md
+STATISTICS_PAGE.md
+TEST_SUPABASE_GUIDE.md
+VERCEL_DEPLOYMENT_GUIDE.md
+washandgo-app-ui-guideline.md
 
 # Fichiers de configuration locale
 vercel.json.local

@@ -24,11 +24,20 @@ export class PdfStorageService {
     try {
       // Générer le PDF
       const pdfBlob = await generateInvoicePdf({
-        engagement: options.engagement,
+        documentNumber: options.engagement.invoice_number || `INV-${options.engagement.id}`,
+        issueDate: new Date(),
+        serviceDate: new Date(options.engagement.service_date),
         company: options.company,
         client: options.client,
         service: options.service,
-        serviceOptions: options.serviceOptions || []
+        options: options.serviceOptions || [],
+        additionalCharge: 0,
+        vatRate: 20,
+        vatEnabled: true,
+        status: options.engagement.status,
+        supportType: options.engagement.support_type,
+        supportDetail: options.engagement.support_detail || '',
+        paymentMethod: options.engagement.payment_method
       })
 
       // Créer un nom de fichier unique
@@ -58,7 +67,7 @@ export class PdfStorageService {
           type: 'invoice',
           file_path: filePath,
           file_url: urlData.publicUrl
-        })
+        } as any)
         .select()
         .single()
 
@@ -78,11 +87,20 @@ export class PdfStorageService {
     try {
       // Générer le PDF
       const pdfBlob = await generateQuotePdf({
-        engagement: options.engagement,
+        documentNumber: options.engagement.quote_number || `QUO-${options.engagement.id}`,
+        issueDate: new Date(),
+        serviceDate: new Date(options.engagement.service_date),
         company: options.company,
         client: options.client,
         service: options.service,
-        serviceOptions: options.serviceOptions || []
+        options: options.serviceOptions || [],
+        additionalCharge: 0,
+        vatRate: 20,
+        vatEnabled: true,
+        status: options.engagement.status,
+        supportType: options.engagement.support_type,
+        supportDetail: options.engagement.support_detail || '',
+        validityNote: options.engagement.validity_note
       })
 
       // Créer un nom de fichier unique
@@ -112,7 +130,7 @@ export class PdfStorageService {
           type: 'quote',
           file_path: filePath,
           file_url: urlData.publicUrl
-        })
+        } as any)
         .select()
         .single()
 
@@ -140,7 +158,7 @@ export class PdfStorageService {
         .single()
 
       if (error) return null
-      return data?.file_url || null
+      return (data as any)?.file_url || null
     } catch (error) {
       console.error('Erreur lors de la récupération du document:', error)
       return null
@@ -162,10 +180,10 @@ export class PdfStorageService {
       if (fetchError) throw fetchError
 
       // Supprimer le fichier du storage
-      if (document?.file_path) {
+      if ((document as any)?.file_path) {
         const { error: storageError } = await supabaseClient.storage
           .from('documents')
-          .remove([document.file_path])
+          .remove([(document as any).file_path])
 
         if (storageError) console.warn('Erreur lors de la suppression du fichier:', storageError)
       }

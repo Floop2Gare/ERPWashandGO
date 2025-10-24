@@ -1595,7 +1595,7 @@ const ServicePage = () => {
       return { status: 'sent' };
     }
 
-    if (sendResult.reason === 'not-configured') {
+    if ((sendResult as any).reason === 'not-configured') {
       openEmailComposer({ to: recipients.emails, subject, body: bodyWithSignature });
       recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
       return { status: 'fallback', message: 'SMTP non configuré – e-mail ouvert dans votre messagerie.' };
@@ -1603,7 +1603,7 @@ const ServicePage = () => {
 
     return {
       status: 'error',
-      message: sendResult.message ?? "Impossible d'envoyer la facture par e-mail.",
+      message: (sendResult as any).message ?? "Impossible d'envoyer la facture par e-mail.",
     };
   };
 
@@ -1705,7 +1705,7 @@ const ServicePage = () => {
       return { status: 'sent' };
     }
 
-    if (sendResult.reason === 'not-configured') {
+    if ((sendResult as any).reason === 'not-configured') {
       openEmailComposer({ to: recipients.emails, subject, body: bodyWithSignature });
       recordEngagementSend(engagement.id, { contactIds: recipients.contactIds, subject });
       return { status: 'fallback', message: 'SMTP non configuré – e-mail ouvert dans votre messagerie.' };
@@ -1713,7 +1713,7 @@ const ServicePage = () => {
 
     return {
       status: 'error',
-      message: sendResult.message ?? "Impossible d'envoyer le devis par e-mail.",
+      message: (sendResult as any).message ?? "Impossible d'envoyer le devis par e-mail.",
     };
   };
 

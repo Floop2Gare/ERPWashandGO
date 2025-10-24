@@ -12,24 +12,24 @@ export type AuthUser = Database['public']['Tables']['auth_users']['Row']
 export type Document = Database['public']['Tables']['documents']['Row']
 
 // Types simplifiés pour le déploiement
-export type CompanyInsert = any
-export type ClientInsert = any
-export type ClientContactInsert = any
-export type ServiceInsert = any
-export type ServiceOptionInsert = any
-export type EngagementInsert = any
-export type AuthUserInsert = any
-export type DocumentInsert = any
+export type CompanyInsert = Database['public']['Tables']['companies']['Insert']
+export type ClientInsert = Database['public']['Tables']['clients']['Insert']
+export type ClientContactInsert = Database['public']['Tables']['client_contacts']['Insert']
+export type ServiceInsert = Database['public']['Tables']['services']['Insert']
+export type ServiceOptionInsert = Database['public']['Tables']['service_options']['Insert']
+export type EngagementInsert = Database['public']['Tables']['engagements']['Insert']
+export type AuthUserInsert = Database['public']['Tables']['auth_users']['Insert']
+export type DocumentInsert = Database['public']['Tables']['documents']['Insert']
 
 // Types pour les mises à jour
-export type CompanyUpdate = any
-export type ClientUpdate = any
-export type ClientContactUpdate = any
-export type ServiceUpdate = any
-export type ServiceOptionUpdate = any
-export type EngagementUpdate = any
-export type AuthUserUpdate = any
-export type DocumentUpdate = any
+export type CompanyUpdate = Database['public']['Tables']['companies']['Update']
+export type ClientUpdate = Database['public']['Tables']['clients']['Update']
+export type ClientContactUpdate = Database['public']['Tables']['client_contacts']['Update']
+export type ServiceUpdate = Database['public']['Tables']['services']['Update']
+export type ServiceOptionUpdate = Database['public']['Tables']['service_options']['Update']
+export type EngagementUpdate = Database['public']['Tables']['engagements']['Update']
+export type AuthUserUpdate = Database['public']['Tables']['auth_users']['Update']
+export type DocumentUpdate = Database['public']['Tables']['documents']['Update']
 
 // Fonctions de base pour interagir avec Supabase
 export class SupabaseService {
@@ -69,6 +69,7 @@ export class SupabaseService {
   static async updateCompany(id: string, updates: CompanyUpdate): Promise<Company> {
     const { data, error } = await supabaseClient
       .from('companies')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
@@ -123,6 +124,7 @@ export class SupabaseService {
   static async updateClient(id: string, updates: ClientUpdate): Promise<Client> {
     const { data, error } = await supabaseClient
       .from('clients')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
@@ -167,6 +169,7 @@ export class SupabaseService {
   static async updateClientContact(id: string, updates: ClientContactUpdate): Promise<ClientContact> {
     const { data, error } = await supabaseClient
       .from('client_contacts')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
@@ -221,6 +224,7 @@ export class SupabaseService {
   static async updateService(id: string, updates: ServiceUpdate): Promise<Service> {
     const { data, error } = await supabaseClient
       .from('services')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
@@ -265,6 +269,7 @@ export class SupabaseService {
   static async updateServiceOption(id: string, updates: ServiceOptionUpdate): Promise<ServiceOption> {
     const { data, error } = await supabaseClient
       .from('service_options')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
@@ -319,6 +324,7 @@ export class SupabaseService {
   static async updateEngagement(id: string, updates: EngagementUpdate): Promise<Engagement> {
     const { data, error } = await supabaseClient
       .from('engagements')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
@@ -373,6 +379,7 @@ export class SupabaseService {
   static async updateAuthUser(id: string, updates: AuthUserUpdate): Promise<AuthUser> {
     const { data, error } = await supabaseClient
       .from('auth_users')
+      // @ts-ignore
       .update(updates)
       .eq('id', id)
       .select()
