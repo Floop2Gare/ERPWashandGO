@@ -241,11 +241,6 @@ const MobileTestPage = () => {
   const [invoiceFeedback, setInvoiceFeedback] = useState<string | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
 
-  const userInitial = useMemo(() => {
-    const source = (userProfile.firstName || userProfile.lastName || userProfile.email || '').trim();
-    return source ? source.slice(0, 1).toUpperCase() : 'W';
-  }, [userProfile.email, userProfile.firstName, userProfile.lastName]);
-
   const scheduleScrollTo = (id: string, delay = 60) => {
     if (typeof window === 'undefined') {
       return;
@@ -1299,6 +1294,9 @@ const MobileTestPage = () => {
           <span className="mobile-app__brand-name">Wash&amp;Go</span>
         </div>
         <div className="mobile-app__header-actions">
+          <span className="mobile-app__user-chip" aria-live="polite">
+            {userProfile.firstName}
+          </span>
           <button
             type="button"
             className="mobile-icon-button"
@@ -1306,6 +1304,14 @@ const MobileTestPage = () => {
             aria-label={themeToggleLabel}
           >
             <span aria-hidden="true">{themeToggleGlyph}</span>
+          </button>
+          <button
+            type="button"
+            className="mobile-icon-button mobile-icon-button--ghost"
+            onClick={logout}
+            aria-label="Se déconnecter"
+          >
+            <span aria-hidden="true">⎋</span>
           </button>
         </div>
       </header>
@@ -1324,41 +1330,22 @@ const MobileTestPage = () => {
           </div>
         ) : null}
       </main>
-      <footer className="mobile-action-bar" role="toolbar" aria-label="Raccourcis rapides">
-        <div className="mobile-action-bar__profile" aria-live="polite">
-          <div className="mobile-action-bar__avatar" aria-hidden="true">
-            {userInitial}
-          </div>
-          <div className="mobile-action-bar__meta">
-            <span className="mobile-action-bar__hello">Bonjour</span>
-            <span className="mobile-action-bar__name">{userProfile.firstName}</span>
-          </div>
-          <button
-            type="button"
-            className="mobile-icon-button mobile-icon-button--ghost"
-            onClick={logout}
-            aria-label="Se déconnecter"
-          >
-            <span aria-hidden="true">⎋</span>
-          </button>
-        </div>
-        <div className="mobile-action-bar__actions">
-          <button
-            type="button"
-            className="mobile-button mobile-button--primary mobile-action-bar__button"
-            onClick={handleQuickCreateTap}
-          >
-            Créer un service
-          </button>
-          <button
-            type="button"
-            className="mobile-button mobile-button--secondary mobile-action-bar__button"
-            onClick={handleQuickStartTap}
-            disabled={!canQuickStart}
-          >
-            Démarrer un service
-          </button>
-        </div>
+      <footer className="mobile-action-bar" role="toolbar" aria-label="Actions rapides">
+        <button
+          type="button"
+          className="mobile-button mobile-button--secondary mobile-action-bar__button"
+          onClick={handleQuickCreateTap}
+        >
+          Créer un service
+        </button>
+        <button
+          type="button"
+          className="mobile-button mobile-button--primary mobile-action-bar__button"
+          onClick={handleQuickStartTap}
+          disabled={!canQuickStart}
+        >
+          Démarrer un service
+        </button>
       </footer>
     </div>
   );
