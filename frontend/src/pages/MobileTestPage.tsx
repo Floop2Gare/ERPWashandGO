@@ -241,6 +241,11 @@ const MobileTestPage = () => {
   const [invoiceFeedback, setInvoiceFeedback] = useState<string | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
 
+  const userInitial = useMemo(() => {
+    const source = (userProfile.firstName || userProfile.lastName || userProfile.email || '').trim();
+    return source ? source.slice(0, 1).toUpperCase() : 'W';
+  }, [userProfile.email, userProfile.firstName, userProfile.lastName]);
+
   const scheduleScrollTo = (id: string, delay = 60) => {
     if (typeof window === 'undefined') {
       return;
@@ -1286,10 +1291,12 @@ const MobileTestPage = () => {
 
   return (
     <div className="mobile-app">
-      <header className="mobile-app__header mobile-app__header--condensed">
-        <div className="mobile-app__title-row">
-          <span className="mobile-app__title">Wash&amp;Go Mobile</span>
-          <span className="mobile-app__subtitle">Terrain</span>
+      <header className="mobile-app__header mobile-app__header--condensed mobile-app__header--slim">
+        <div className="mobile-app__brand-inline" aria-label="Wash and Go">
+          <span className="mobile-app__logo" aria-hidden="true">
+            WG
+          </span>
+          <span className="mobile-app__brand-name">Wash&amp;Go</span>
         </div>
         <div className="mobile-app__header-actions">
           <button
@@ -1300,18 +1307,6 @@ const MobileTestPage = () => {
           >
             <span aria-hidden="true">{themeToggleGlyph}</span>
           </button>
-          <div className="mobile-user-chip" aria-live="polite">
-            <span className="mobile-user-chip__name">
-              {userProfile.firstName} {userProfile.lastName}
-            </span>
-            <button
-              type="button"
-              className="mobile-button mobile-button--ghost mobile-button--dense"
-              onClick={logout}
-            >
-              Déconnexion
-            </button>
-          </div>
         </div>
       </header>
       <main className="mobile-app__main">
@@ -1330,21 +1325,40 @@ const MobileTestPage = () => {
         ) : null}
       </main>
       <footer className="mobile-action-bar" role="toolbar" aria-label="Raccourcis rapides">
-        <button
-          type="button"
-          className="mobile-button mobile-button--primary mobile-action-bar__button"
-          onClick={handleQuickCreateTap}
-        >
-          Créer un service
-        </button>
-        <button
-          type="button"
-          className="mobile-button mobile-button--secondary mobile-action-bar__button"
-          onClick={handleQuickStartTap}
-          disabled={!canQuickStart}
-        >
-          Démarrer un service
-        </button>
+        <div className="mobile-action-bar__profile" aria-live="polite">
+          <div className="mobile-action-bar__avatar" aria-hidden="true">
+            {userInitial}
+          </div>
+          <div className="mobile-action-bar__meta">
+            <span className="mobile-action-bar__hello">Bonjour</span>
+            <span className="mobile-action-bar__name">{userProfile.firstName}</span>
+          </div>
+          <button
+            type="button"
+            className="mobile-icon-button mobile-icon-button--ghost"
+            onClick={logout}
+            aria-label="Se déconnecter"
+          >
+            <span aria-hidden="true">⎋</span>
+          </button>
+        </div>
+        <div className="mobile-action-bar__actions">
+          <button
+            type="button"
+            className="mobile-button mobile-button--primary mobile-action-bar__button"
+            onClick={handleQuickCreateTap}
+          >
+            Créer un service
+          </button>
+          <button
+            type="button"
+            className="mobile-button mobile-button--secondary mobile-action-bar__button"
+            onClick={handleQuickStartTap}
+            disabled={!canQuickStart}
+          >
+            Démarrer un service
+          </button>
+        </div>
       </footer>
     </div>
   );
