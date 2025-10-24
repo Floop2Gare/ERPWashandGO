@@ -7,7 +7,7 @@ console.log('🚀 Starting Vercel build process...');
 // Étape 1: Build du frontend
 console.log('📦 Building frontend...');
 try {
-  execSync('npm --prefix frontend run build', { stdio: 'inherit' });
+  execSync('npm run build', { stdio: 'inherit' });
   console.log('✅ Frontend build completed');
 } catch (error) {
   console.error('❌ Frontend build failed:', error.message);
