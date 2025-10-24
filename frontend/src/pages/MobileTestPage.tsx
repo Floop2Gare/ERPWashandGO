@@ -242,7 +242,6 @@ const showPersistentTimerNotification = async (payload: TimerNotificationPayload
     await showMobileNotification(payload.title, {
       body: payload.body,
       tag: `${TIMER_NOTIFICATION_TAG_PREFIX}-${payload.engagementId}`,
-      renotify: true,
       requireInteraction: true,
     });
   }
@@ -797,40 +796,6 @@ const MobileTestPage = () => {
   }, [clientsById, engagements, showCommentForm, timerState, displayElapsed, servicesById]);
 
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-      return;
-    }
-    const handleMessage = (event: MessageEvent) => {
-      const data = event.data;
-      if (!data || typeof data !== 'object') {
-        return;
-      }
-      if (data.type === 'timer-notification-action') {
-        const { action, engagementId } = data.payload ?? {};
-        if (!engagementId || !timerState || timerState.engagementId !== engagementId) {
-          return;
-        }
-        if (action === 'pause') {
-          handlePauseTimer();
-        } else if (action === 'resume') {
-          handleResumeTimer();
-        } else if (action === 'stop') {
-          handleCompleteTimer();
-        }
-      } else if (data.type === 'timer-notification-closed') {
-        const { engagementId } = data.payload ?? {};
-        if (engagementId && notificationEngagementRef.current === engagementId && (!timerState || !timerState.running)) {
-          notificationEngagementRef.current = null;
-        }
-      }
-    };
-    navigator.serviceWorker.addEventListener('message', handleMessage);
-    return () => {
-      navigator.serviceWorker.removeEventListener('message', handleMessage);
-    };
-  }, [handleCompleteTimer, handlePauseTimer, handleResumeTimer, timerState]);
-
-  useEffect(() => {
     if (view !== 'create') {
       return;
     }
@@ -942,6 +907,40 @@ const MobileTestPage = () => {
     }
     setShowCommentForm(true);
   }, []);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+      return;
+    }
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') {
+        return;
+      }
+      if (data.type === 'timer-notification-action') {
+        const { action, engagementId } = data.payload ?? {};
+        if (!engagementId || !timerState || timerState.engagementId !== engagementId) {
+          return;
+        }
+        if (action === 'pause') {
+          handlePauseTimer();
+        } else if (action === 'resume') {
+          handleResumeTimer();
+        } else if (action === 'stop') {
+          handleCompleteTimer();
+        }
+      } else if (data.type === 'timer-notification-closed') {
+        const { engagementId } = data.payload ?? {};
+        if (engagementId && notificationEngagementRef.current === engagementId && (!timerState || !timerState.running)) {
+          notificationEngagementRef.current = null;
+        }
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleMessage);
+    };
+  }, [handleCompleteTimer, handlePauseTimer, handleResumeTimer, timerState]);
 
   const handleValidateTimer = (engagement: Engagement) => {
     if (!timerState) {
