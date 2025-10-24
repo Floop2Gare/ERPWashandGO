@@ -740,6 +740,14 @@
   border-color: color-mix(in srgb, var(--accent) 25%, var(--border) 75%);
 }
 
+.mobile-planning__item--empty {
+  grid-template-columns: 1fr;
+  align-items: center;
+  justify-content: center;
+  border-left-color: transparent;
+  box-shadow: none;
+}
+
 .mobile-planning__time {
   display: flex;
   flex-direction: column;
@@ -778,6 +786,13 @@
   margin: 0;
   font-size: 0.8rem;
   color: color-mix(in srgb, var(--muted) 90%, var(--text) 10%);
+}
+
+.mobile-planning__empty {
+  margin: 0 auto;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
 }
 
 .mobile-planning__actions {

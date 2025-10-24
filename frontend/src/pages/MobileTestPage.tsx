@@ -389,7 +389,9 @@ const MobileTestPage = () => {
 
   const filteredServiceEngagements = useMemo(() => {
     if (serviceFilter === 'upcoming') {
-      return serviceEngagements.filter((engagement) => engagement.status === 'planifié' || engagement.status === 'envoyé');
+      return serviceEngagements.filter(
+        (engagement) => engagement.status === 'planifié' || engagement.status === 'envoyé'
+      );
     }
     if (serviceFilter === 'done') {
       return serviceEngagements.filter((engagement) => engagement.status === 'réalisé');
@@ -397,12 +399,24 @@ const MobileTestPage = () => {
     return serviceEngagements;
   }, [serviceEngagements, serviceFilter]);
 
+  const todaysServiceEngagements = useMemo(() => {
+    const todayKey = formatDateFn(new Date(), 'yyyy-MM-dd');
+    return filteredServiceEngagements.filter((engagement) => {
+      const scheduled = new Date(engagement.scheduledAt);
+      if (!isValidDate(scheduled)) {
+        return false;
+      }
+      const key = formatDateFn(scheduled, 'yyyy-MM-dd');
+      return key === todayKey;
+    });
+  }, [filteredServiceEngagements]);
+
   const visibleServiceEngagements = useMemo(() => {
     const query = serviceSearchTerm.trim().toLowerCase();
     if (!query) {
-      return filteredServiceEngagements;
+      return todaysServiceEngagements;
     }
-    return filteredServiceEngagements.filter((engagement) => {
+    return todaysServiceEngagements.filter((engagement) => {
       const clientName = clientsById.get(engagement.clientId)?.name?.toLowerCase() ?? '';
       const serviceName = servicesById.get(engagement.serviceId)?.name?.toLowerCase() ?? '';
       const supportLabel = engagement.supportDetail
@@ -412,21 +426,21 @@ const MobileTestPage = () => {
       const haystacks = [clientName, serviceName, supportLabel, statusLabel].filter(Boolean);
       return haystacks.some((value) => value.includes(query));
     });
-  }, [clientsById, filteredServiceEngagements, serviceSearchTerm, servicesById]);
+  }, [clientsById, servicesById, serviceSearchTerm, todaysServiceEngagements]);
 
   const serviceResultsCount = visibleServiceEngagements.length;
 
   const serviceMetrics = useMemo(() => {
-    const planned = serviceEngagements.filter((engagement) => engagement.status === 'planifié').length;
-    const inProgress = serviceEngagements.filter((engagement) => engagement.status === 'envoyé').length;
-    const completed = serviceEngagements.filter((engagement) => engagement.status === 'réalisé').length;
+    const planned = todaysServiceEngagements.filter((engagement) => engagement.status === 'planifié').length;
+    const inProgress = todaysServiceEngagements.filter((engagement) => engagement.status === 'envoyé').length;
+    const completed = todaysServiceEngagements.filter((engagement) => engagement.status === 'réalisé').length;
     return {
-      total: serviceEngagements.length,
+      total: todaysServiceEngagements.length,
       planned,
       inProgress,
       completed,
     };
-  }, [serviceEngagements]);
+  }, [todaysServiceEngagements]);
 
   const filterCounts = useMemo(
     () => ({
@@ -438,6 +452,9 @@ const MobileTestPage = () => {
   );
 
   const planningEvents = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const windowLimit = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
     const baseline = serviceEngagements
       .map((engagement) => {
         const start = new Date(engagement.scheduledAt);
@@ -459,31 +476,36 @@ const MobileTestPage = () => {
       })
       .filter((event): event is CalendarEvent => Boolean(event));
 
-    return [...baseline].sort((a, b) => a.start.getTime() - b.start.getTime());
+    return baseline
+      .filter((event) => event.start.getTime() >= todayStart.getTime() && event.start.getTime() < windowLimit.getTime())
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [clientsById, computeEngagementTotals, serviceEngagements, servicesById]);
 
   const planningDays = useMemo(() => {
-    const groups = new Map<
-      string,
-      { date: Date; label: string; iso: string; events: CalendarEvent[] }
-    >();
+    const days: { date: Date; label: string; iso: string; events: CalendarEvent[] }[] = [];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const eventsByDay = new Map<string, CalendarEvent[]>();
 
     planningEvents.forEach((event) => {
       const key = formatDateFn(event.start, 'yyyy-MM-dd');
-      if (!groups.has(key)) {
-        groups.set(key, {
-          date: new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate()),
-          iso: key,
-          label: formatDateFn(event.start, 'EEEE d MMMM', { locale: fr }),
-          events: [],
-        });
+      const bucket = eventsByDay.get(key);
+      if (bucket) {
+        bucket.push(event);
+      } else {
+        eventsByDay.set(key, [event]);
       }
-      groups.get(key)?.events.push(event);
     });
 
-    return Array.from(groups.values()).sort(
-      (a, b) => a.date.getTime() - b.date.getTime()
-    );
+    for (let offset = 0; offset < 7; offset += 1) {
+      const date = new Date(todayStart.getTime() + offset * 24 * 60 * 60 * 1000);
+      const iso = formatDateFn(date, 'yyyy-MM-dd');
+      const rawLabel = formatDateFn(date, 'EEEE d MMMM', { locale: fr });
+      const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+      days.push({ date, iso, label, events: eventsByDay.get(iso) ?? [] });
+    }
+
+    return days;
   }, [planningEvents]);
 
   const planningEventCount = planningEvents.length;
@@ -494,10 +516,10 @@ const MobileTestPage = () => {
 
   const nextRunnableEngagement = useMemo(
     () =>
-      serviceEngagements.find(
+      todaysServiceEngagements.find(
         (engagement) => engagement.status === 'planifié' || engagement.status === 'envoyé'
       ) ?? null,
-    [serviceEngagements]
+    [todaysServiceEngagements]
   );
 
   useEffect(() => {
@@ -684,7 +706,7 @@ const MobileTestPage = () => {
   const todaysLabel = todaysLabelRaw.charAt(0).toUpperCase() + todaysLabelRaw.slice(1);
   const timeLabel = formatDateFn(now, 'HH:mm');
   const heroGreeting = userProfile.firstName ? `Bonjour ${userProfile.firstName}` : 'Bonjour';
-  const heroSubtitle = activeCompany ? `Équipe ${activeCompany.name}` : 'Wash&Go terrain';
+  const heroSubtitle = activeCompany ? `Services du jour · ${activeCompany.name}` : 'Services du jour';
   const isDarkTheme = theme === 'dark';
   const themeToggleGlyph = isDarkTheme ? '☾' : '☀︎';
   const themeToggleLabel = isDarkTheme ? 'Basculer en mode clair' : 'Basculer en mode sombre';
@@ -988,6 +1010,13 @@ const MobileTestPage = () => {
                         </li>
                       );
                     })}
+                    {!day.events.length ? (
+                      <li className="mobile-planning__item mobile-planning__item--empty">
+                        <div className="mobile-planning__content">
+                          <p className="mobile-planning__empty">Aucune intervention prévue.</p>
+                        </div>
+                      </li>
+                    ) : null}
                   </ul>
                 </article>
               );
