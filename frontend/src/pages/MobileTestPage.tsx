@@ -1324,21 +1324,23 @@ const MobileTestPage = () => {
         ) : null}
       </main>
       <footer className="mobile-action-bar" role="toolbar" aria-label="Actions rapides">
-        <button
-          type="button"
-          className="mobile-button mobile-button--secondary mobile-action-bar__button"
-          onClick={handleQuickCreateTap}
-        >
-          Créer
-        </button>
-        <button
-          type="button"
-          className="mobile-button mobile-button--primary mobile-action-bar__button"
-          onClick={handleQuickStartTap}
-          disabled={!canQuickStart}
-        >
-          Démarrer
-        </button>
+        <div className="mobile-action-bar__group">
+          <button
+            type="button"
+            className="mobile-button mobile-button--secondary mobile-action-bar__button"
+            onClick={handleQuickCreateTap}
+          >
+            Créer
+          </button>
+          <button
+            type="button"
+            className="mobile-button mobile-button--primary mobile-action-bar__button"
+            onClick={handleQuickStartTap}
+            disabled={!canQuickStart}
+          >
+            Démarrer
+          </button>
+        </div>
       </footer>
     </div>
   );
