@@ -9,10 +9,11 @@ import {
   ServiceOption,
   EngagementStatus,
   SupportType,
+  EngagementOptionOverride,
 } from '../store/useAppData';
 import { formatCurrency, formatDuration } from './format';
 
-export interface GenerateInvoicePayload {
+interface GenerateCommercialDocumentPayloadBase {
   documentNumber: string;
   issueDate: Date;
   serviceDate: Date;
@@ -20,13 +21,21 @@ export interface GenerateInvoicePayload {
   client: Client;
   service: Service;
   options: ServiceOption[];
+  optionOverrides?: Record<string, EngagementOptionOverride>;
   additionalCharge: number;
   vatRate: number;
   vatEnabled: boolean;
   status: EngagementStatus;
   supportType: SupportType;
   supportDetail: string;
+}
+
+export interface GenerateInvoicePayload extends GenerateCommercialDocumentPayloadBase {
   paymentMethod?: string | null;
+}
+
+export interface GenerateQuotePayload extends GenerateCommercialDocumentPayloadBase {
+  validityNote?: string | null;
 }
 
 const addMultilineText = (
@@ -91,7 +100,24 @@ const detectImageFormat = (source: string): 'PNG' | 'JPEG' | 'WEBP' => {
   return 'PNG';
 };
 
-const formatStatusLabel = (status: EngagementStatus) => {
+type CommercialDocumentMode = 'invoice' | 'quote';
+
+const formatStatusLabel = (status: EngagementStatus, mode: CommercialDocumentMode) => {
+  if (mode === 'quote') {
+    switch (status) {
+      case 'réalisé':
+      case 'planifié':
+        return 'Accepté';
+      case 'annulé':
+        return 'Refusé';
+      case 'envoyé':
+        return 'Envoyé';
+      case 'brouillon':
+      default:
+        return 'Brouillon';
+    }
+  }
+
   switch (status) {
     case 'réalisé':
       return 'Payé';
@@ -140,22 +166,28 @@ const formatVatRateLabel = (value: number) => {
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
-export const generateInvoicePdf = ({
-  documentNumber,
-  issueDate,
-  serviceDate,
-  company,
-  client,
-  service,
-  options,
-  additionalCharge,
-  vatRate,
-  vatEnabled,
-  status,
-  supportType,
-  supportDetail,
-  paymentMethod,
-}: GenerateInvoicePayload) => {
+
+const generateCommercialDocumentPdf = (
+  mode: CommercialDocumentMode,
+  {
+    documentNumber,
+    issueDate,
+    serviceDate,
+    company,
+    client,
+    service,
+    options,
+    optionOverrides,
+    additionalCharge,
+    vatRate,
+    vatEnabled,
+    status,
+    supportType,
+    supportDetail,
+    paymentMethod,
+    validityNote,
+  }: GenerateCommercialDocumentPayloadBase & { paymentMethod?: string | null; validityNote?: string | null }
+) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -173,19 +205,33 @@ export const generateInvoicePdf = ({
 
   const formattedIssueDate = format(issueDate, 'dd/MM/yyyy', { locale: fr });
   const formattedServiceDate = format(serviceDate, 'dd/MM/yyyy', { locale: fr });
-  const statusLabel = formatStatusLabel(status);
+  const statusLabel = formatStatusLabel(status, mode);
   const paymentLabel = paymentMethod?.trim() ?? '';
+  const headingTitle = mode === 'invoice' ? 'FACTURE' : 'DEVIS';
+  const serviceDateLabel = mode === 'invoice' ? 'Date de réalisation' : 'Date prévue';
 
-  const invoiceLines: InvoiceLine[] = options.map((option) => ({
-    label: option.label,
-    detail: option.duration ? `Durée : ${formatDuration(option.duration)}` : null,
-    quantity: 1,
-    unitPrice: option.price,
-    total: option.price,
-  }));
+  const documentLines: InvoiceLine[] = options.map((option) => {
+    const override = optionOverrides?.[option.id];
+    const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+    const durationValue =
+      override?.durationMin !== undefined && override.durationMin >= 0
+        ? override.durationMin
+        : option.defaultDurationMin;
+    const unitPrice =
+      override?.unitPriceHT !== undefined && override.unitPriceHT >= 0
+        ? override.unitPriceHT
+        : option.unitPriceHT;
+    return {
+      label: option.label,
+      detail: durationValue ? `Durée : ${formatDuration(durationValue)}` : null,
+      quantity,
+      unitPrice,
+      total: roundCurrency(unitPrice * quantity),
+    } satisfies InvoiceLine;
+  });
 
   if (additionalCharge > 0) {
-    invoiceLines.push({
+    documentLines.push({
       label: 'Frais complémentaires',
       quantity: 1,
       unitPrice: additionalCharge,
@@ -193,7 +239,7 @@ export const generateInvoicePdf = ({
     });
   }
 
-  const subtotal = roundCurrency(invoiceLines.reduce((sum, line) => sum + line.total, 0));
+  const subtotal = roundCurrency(documentLines.reduce((sum, line) => sum + line.total, 0));
   const vatRateSafe = safeVatRate(vatRate);
   const vatAmount = vatEnabled ? roundCurrency(subtotal * (vatRateSafe / 100)) : 0;
   const grandTotal = vatEnabled ? roundCurrency(subtotal + vatAmount) : subtotal;
@@ -304,19 +350,26 @@ export const generateInvoicePdf = ({
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(headingFontSize);
   doc.setTextColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b);
-  doc.text(`FACTURE N° ${documentNumber}`, pageWidth - margin, cursorY, { align: 'right' });
+  doc.text(`${headingTitle} N° ${documentNumber}`, pageWidth - margin, cursorY, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(bodyFontSize);
   doc.setTextColor(TEXT_COLOR.r, TEXT_COLOR.g, TEXT_COLOR.b);
 
-  const invoiceMeta = [`Date d'émission : ${formattedIssueDate}`, `Statut : ${statusLabel}`];
-  if (paymentLabel) {
-    invoiceMeta.push(`Moyen de paiement : ${paymentLabel}`);
+  const metaLines = [
+    `Date d'émission : ${formattedIssueDate}`,
+    `${serviceDateLabel} : ${formattedServiceDate}`,
+    `Statut : ${statusLabel}`,
+  ];
+  if (mode === 'invoice' && paymentLabel) {
+    metaLines.push(`Moyen de paiement : ${paymentLabel}`);
+  }
+  if (mode === 'quote' && validityNote) {
+    metaLines.push(`Validité : ${validityNote}`);
   }
 
   let metaY = cursorY + lineHeight;
-  invoiceMeta.forEach((line) => {
+  metaLines.forEach((line) => {
     doc.text(line, pageWidth - margin, metaY, { align: 'right' });
     metaY += lineHeight;
   });
@@ -335,7 +388,7 @@ export const generateInvoicePdf = ({
   const serviceLines = [
     service.name,
     `Support : ${formatSupportDetails(supportType, supportDetail)}`,
-    `Date de réalisation : ${formattedServiceDate}`,
+    `${serviceDateLabel} : ${formattedServiceDate}`,
   ];
   serviceLines.forEach((line) => {
     cursorY = addMultilineText(doc, line, margin, cursorY, contentWidth, lineHeight);
@@ -388,8 +441,9 @@ export const generateInvoicePdf = ({
   }
   drawTableHeader();
 
-  invoiceLines.forEach((line) => {
-    const descriptionContent = line.detail ? `${line.label}\n${line.detail}` : line.label;
+  documentLines.forEach((line) => {
+    const descriptionContent = line.detail ? `${line.label}
+${line.detail}` : line.label;
     const descriptionLines = doc.splitTextToSize(
       descriptionContent,
       columnWidths[0] - cellPaddingX * 2
@@ -477,3 +531,10 @@ export const generateInvoicePdf = ({
 
   return doc;
 };
+
+export const generateInvoicePdf = (payload: GenerateInvoicePayload) =>
+  generateCommercialDocumentPdf('invoice', payload);
+
+export const generateQuotePdf = (payload: GenerateQuotePayload) =>
+  generateCommercialDocumentPdf('quote', { ...payload, paymentMethod: null });
+

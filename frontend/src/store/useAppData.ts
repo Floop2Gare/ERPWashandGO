@@ -2,14 +2,7 @@ import { create } from 'zustand';
 import { addMinutes, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-import {
-  BRANDING_COLOR_STORAGE_KEY,
-  DEFAULT_BRANDING_COLOR_ID,
-  BRAND_FULL_TITLE,
-  BRAND_NAME,
-  LEGACY_BRANDING_COLOR_STORAGE_KEYS,
-  type BrandingColorId,
-} from '../lib/branding';
+import { BRAND_FULL_TITLE, BRAND_NAME } from '../lib/branding';
 import {
   APP_PAGE_OPTIONS,
   USER_ROLE_LABELS,
@@ -56,18 +49,28 @@ export type Client = {
 export type ServiceOption = {
   id: string;
   label: string;
-  price: number;
-  duration: number;
-  tag?: string;
+  description?: string;
+  defaultDurationMin: number;
+  unitPriceHT: number;
+  tvaPct?: number | null;
+  active: boolean;
 };
+
+export type ServiceCategory = 'Voiture' | 'Canapé' | 'Textile' | 'Autre';
 
 export type Service = {
   id: string;
-  category: 'Voiture' | 'Canapé' | 'Textile';
+  category: ServiceCategory;
   name: string;
-  description: string;
+  description?: string;
   options: ServiceOption[];
   active: boolean;
+};
+
+export type EngagementOptionOverride = {
+  quantity?: number;
+  unitPriceHT?: number;
+  durationMin?: number;
 };
 
 export type EngagementStatus = 'brouillon' | 'envoyé' | 'planifié' | 'réalisé' | 'annulé';
@@ -103,9 +106,15 @@ export type Engagement = {
   supportDetail: string;
   additionalCharge: number;
   contactIds: string[];
+  assignedUserIds: string[];
   sendHistory: EngagementSendRecord[];
   invoiceNumber: string | null;
   invoiceVatEnabled: boolean | null;
+  quoteNumber: string | null;
+  quoteStatus: CommercialDocumentStatus | null;
+  optionOverrides?: Record<string, EngagementOptionOverride>;
+  mobileDurationMinutes?: number | null;
+  mobileCompletionComment?: string | null;
 };
 
 export type Note = {
@@ -277,6 +286,10 @@ export type EmailSignature = {
 
 export type DocumentSource = 'Google Drive' | 'Lien externe' | 'Archive interne';
 
+export type CommercialDocumentKind = 'devis' | 'facture';
+
+export type CommercialDocumentStatus = 'brouillon' | 'envoyé' | 'accepté' | 'refusé' | 'payé';
+
 export type DocumentRecord = {
   id: string;
   title: string;
@@ -292,6 +305,17 @@ export type DocumentRecord = {
   size?: string;
   fileName?: string;
   fileData?: string;
+  kind?: CommercialDocumentKind;
+  engagementId?: string | null;
+  number?: string | null;
+  status?: CommercialDocumentStatus | null;
+  totalHt?: number | null;
+  totalTtc?: number | null;
+  vatAmount?: number | null;
+  vatRate?: number | null;
+  issueDate?: string | null;
+  dueDate?: string | null;
+  recipients?: string[];
 };
 
 export type DocumentWorkspace = {
@@ -396,7 +420,6 @@ type AppState = {
   vatEnabled: boolean;
   vatRate: number;
   theme: ThemeMode;
-  brandingColorId: BrandingColorId;
   sidebarTitlePreference: SidebarTitlePreference;
   emailSignatures: EmailSignature[];
   getCurrentUser: () => AuthUser | null;
@@ -437,10 +460,12 @@ type AppState = {
   setClientBillingContact: (clientId: string, contactId: string) => void;
   removeClient: (clientId: string) => void;
   restoreClient: (payload: { client: Client; engagements: Engagement[]; notes: Note[] }) => void;
-  addEngagement: (payload: Omit<Engagement, 'id'>) => Engagement;
+  addEngagement: (
+    payload: Omit<Engagement, 'id' | 'assignedUserIds'> & { assignedUserIds?: string[] }
+  ) => Engagement;
   updateEngagement: (
     engagementId: string,
-    updates: Partial<Omit<Engagement, 'id'>>
+    updates: Partial<Omit<Engagement, 'id'>> & { assignedUserIds?: string[] }
   ) => Engagement | null;
   recordEngagementSend: (
     engagementId: string,
@@ -504,8 +529,6 @@ type AppState = {
   setVatRate: (rate: number) => void;
   setTheme: (mode: ThemeMode) => void;
   toggleTheme: () => void;
-  setBrandingColorId: (id: BrandingColorId) => void;
-  resetBrandingColor: () => void;
   createEmailSignature: (
     payload: {
       scope: EmailSignatureScope;
@@ -593,16 +616,20 @@ const computeServiceAveragePrice = (service: Service | undefined) => {
   if (!service || service.options.length === 0) {
     return 0;
   }
-  const total = service.options.reduce((sum, option) => sum + option.price, 0);
-  return total / service.options.length;
+  const base = service.options.filter((option) => option.active);
+  const options = base.length > 0 ? base : service.options;
+  const total = options.reduce((sum, option) => sum + option.unitPriceHT, 0);
+  return total / options.length;
 };
 
 const computeServiceAverageDuration = (service: Service | undefined) => {
   if (!service || service.options.length === 0) {
     return 0;
   }
-  const optionDuration = service.options.reduce((sum, option) => sum + option.duration, 0);
-  return optionDuration / service.options.length;
+  const base = service.options.filter((option) => option.active);
+  const options = base.length > 0 ? base : service.options;
+  const optionDuration = options.reduce((sum, option) => sum + option.defaultDurationMin, 0);
+  return optionDuration / options.length;
 };
 
 const initialProfile: UserProfile = {
@@ -1056,35 +1083,6 @@ const persistTheme = (mode: ThemeMode) => {
   }
 };
 
-const resolveInitialBrandingColorId = (): BrandingColorId => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_BRANDING_COLOR_ID;
-  }
-  const stored =
-    window.localStorage.getItem(BRANDING_COLOR_STORAGE_KEY) ??
-    LEGACY_BRANDING_COLOR_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
-  if (!stored) {
-    return DEFAULT_BRANDING_COLOR_ID;
-  }
-  return (
-    ['black', 'blue', 'orange', 'green', 'charcoal'].includes(stored)
-      ? (stored as BrandingColorId)
-      : DEFAULT_BRANDING_COLOR_ID
-  );
-};
-
-const persistBrandingColorId = (id: BrandingColorId) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  try {
-    window.localStorage.setItem(BRANDING_COLOR_STORAGE_KEY, id);
-    LEGACY_BRANDING_COLOR_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
-  } catch (error) {
-    console.warn('Impossible de sauvegarder la couleur de personnalisation.', error);
-  }
-};
-
 const initialDocuments: DocumentRecord[] = [
   {
     id: 'doc-contrat-horizon-2024',
@@ -1443,8 +1441,24 @@ const initialServices: Service[] = [
     name: 'Nettoyage intérieur complet',
     description: 'Aspiration, dégraissage et protection des surfaces intérieures.',
     options: [
-      { id: 'o1', label: 'Protection tissus', price: 35, duration: 30, tag: 'Protection' },
-      { id: 'o2', label: 'Traitement désodorisant', price: 15, duration: 15, tag: 'Confort' },
+      {
+        id: 'o1',
+        label: 'Protection tissus',
+        description: 'Protection',
+        unitPriceHT: 35,
+        defaultDurationMin: 30,
+        tvaPct: 20,
+        active: true,
+      },
+      {
+        id: 'o2',
+        label: 'Traitement désodorisant',
+        description: 'Confort',
+        unitPriceHT: 15,
+        defaultDurationMin: 15,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: true,
   },
@@ -1454,7 +1468,15 @@ const initialServices: Service[] = [
     name: 'Détachage canapé 3 places',
     description: 'Nettoyage vapeur et traitement anti-taches.',
     options: [
-      { id: 'o3', label: 'Protection imperméabilisante', price: 25, duration: 20, tag: 'Protection' },
+      {
+        id: 'o3',
+        label: 'Protection imperméabilisante',
+        description: 'Protection',
+        unitPriceHT: 25,
+        defaultDurationMin: 20,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: true,
   },
@@ -1464,8 +1486,24 @@ const initialServices: Service[] = [
     name: 'Nettoyage tapis laine',
     description: 'Aspiration en profondeur et shampoing doux.',
     options: [
-      { id: 'o4', label: 'Traitement anti-acariens', price: 40, duration: 25, tag: 'Santé' },
-      { id: 'o5', label: 'Séchage accéléré', price: 20, duration: 15, tag: 'Logistique' },
+      {
+        id: 'o4',
+        label: 'Traitement anti-acariens',
+        description: 'Santé',
+        unitPriceHT: 40,
+        defaultDurationMin: 25,
+        tvaPct: 20,
+        active: true,
+      },
+      {
+        id: 'o5',
+        label: 'Séchage accéléré',
+        description: 'Logistique',
+        unitPriceHT: 20,
+        defaultDurationMin: 15,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: true,
   },
@@ -1475,7 +1513,15 @@ const initialServices: Service[] = [
     name: 'Rénovation sièges cuir',
     description: 'Nettoyage, nourrissage et finition satinée.',
     options: [
-      { id: 'o6', label: 'Protection anti-UV', price: 30, duration: 20, tag: 'Protection' },
+      {
+        id: 'o6',
+        label: 'Protection anti-UV',
+        description: 'Protection',
+        unitPriceHT: 30,
+        defaultDurationMin: 20,
+        tvaPct: 20,
+        active: true,
+      },
     ],
     active: false,
   },
@@ -1495,9 +1541,14 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'SUV hybride',
     additionalCharge: 0,
     contactIds: ['ct1'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: null,
+    quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e2',
@@ -1512,9 +1563,14 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Angle 5 places',
     additionalCharge: 0,
     contactIds: ['ct3'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: 'DEV-202404-0001',
+    quoteStatus: 'envoyé',
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e3',
@@ -1529,9 +1585,14 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Tapis laine 8 m²',
     additionalCharge: 0,
     contactIds: ['ct5'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: 'FAC-202404-0001',
     invoiceVatEnabled: true,
+    quoteNumber: null,
+    quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e4',
@@ -1546,9 +1607,14 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Citadine de prêt',
     additionalCharge: 0,
     contactIds: ['ct7'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: null,
+    quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
   {
     id: 'e5',
@@ -1563,9 +1629,14 @@ const initialEngagements: Engagement[] = [
     supportDetail: 'Convertible 3 places',
     additionalCharge: 0,
     contactIds: ['ct8'],
+    assignedUserIds: ['auth-adrien'],
     sendHistory: [],
     invoiceNumber: null,
     invoiceVatEnabled: null,
+    quoteNumber: null,
+    quoteStatus: null,
+    mobileDurationMinutes: null,
+    mobileCompletionComment: null,
   },
 ];
 
@@ -1941,14 +2012,56 @@ const projects: Project[] = [
   },
 ];
 
+const sanitizeOptionOverrides = (
+  optionIds: string[],
+  overrides?: Record<string, EngagementOptionOverride>
+): Record<string, EngagementOptionOverride> => {
+  if (!overrides) {
+    return {};
+  }
+  const allowed = new Set(optionIds);
+  const next: Record<string, EngagementOptionOverride> = {};
+  for (const [optionId, value] of Object.entries(overrides)) {
+    if (!allowed.has(optionId)) {
+      continue;
+    }
+    const quantity = value.quantity && Number.isFinite(value.quantity) ? Math.max(1, value.quantity) : 1;
+    const unitPrice =
+      value.unitPriceHT !== undefined && Number.isFinite(value.unitPriceHT)
+        ? Math.max(0, value.unitPriceHT)
+        : undefined;
+    const duration =
+      value.durationMin !== undefined && Number.isFinite(value.durationMin)
+        ? Math.max(0, value.durationMin)
+        : undefined;
+    next[optionId] = {
+      quantity,
+      unitPriceHT: unitPrice,
+      durationMin: duration,
+    };
+  }
+  return next;
+};
+
 const computeTotals = (engagement: Engagement, catalogue: Service[] = initialServices) => {
   const service = catalogue.find((item) => item.id === engagement.serviceId);
   if (!service) {
     return { price: 0, duration: 0, surcharge: 0 };
   }
+  const overrides = sanitizeOptionOverrides(engagement.optionIds, engagement.optionOverrides);
   const selectedOptions = service.options.filter((option) => engagement.optionIds.includes(option.id));
-  const price = selectedOptions.reduce((acc, option) => acc + option.price, 0);
-  const duration = selectedOptions.reduce((acc, option) => acc + option.duration, 0);
+  const price = selectedOptions.reduce((acc, option) => {
+    const override = overrides[option.id];
+    const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+    const unitPrice = override?.unitPriceHT ?? option.unitPriceHT;
+    return acc + unitPrice * quantity;
+  }, 0);
+  const duration = selectedOptions.reduce((acc, option) => {
+    const override = overrides[option.id];
+    const quantity = override?.quantity && override.quantity > 0 ? override.quantity : 1;
+    const durationValue = override?.durationMin ?? option.defaultDurationMin;
+    return acc + durationValue * quantity;
+  }, 0);
   const surcharge = engagement.additionalCharge ?? 0;
   return { price, duration, surcharge };
 };
@@ -1995,7 +2108,6 @@ const seedNotificationSource =
     : seedAuthUsers[0]?.notificationPreferences) || initialNotificationPreferences;
 const initialCurrentUserId = resolvedCurrentUser?.id ?? null;
 const initialTheme = resolveInitialTheme();
-const initialBrandingColorId = resolveInitialBrandingColorId();
 const initialSidebarTitlePreference = resolveInitialSidebarTitlePreference();
 export const useAppData = create<AppState>((set, get) => ({
   clients: initialClients,
@@ -2032,7 +2144,6 @@ export const useAppData = create<AppState>((set, get) => ({
   vatEnabled: initialCompanies[0]?.vatEnabled ?? true,
   vatRate: initialVatSettings.rate,
   theme: initialTheme,
-  brandingColorId: initialBrandingColorId,
   sidebarTitlePreference: initialSidebarTitlePreference,
   getCurrentUser: () => {
     const { authUsers, currentUserId } = get();
@@ -2446,15 +2557,35 @@ export const useAppData = create<AppState>((set, get) => ({
     });
   },
   addEngagement: (payload) => {
+    const optionIds = payload.optionIds ? [...payload.optionIds] : [];
+    const overrides = sanitizeOptionOverrides(optionIds, payload.optionOverrides);
     const newEngagement: Engagement = {
       ...payload,
+      optionIds,
+      optionOverrides: overrides,
       additionalCharge: payload.additionalCharge ?? 0,
       contactIds: payload.contactIds ?? [],
+      assignedUserIds: payload.assignedUserIds ? [...payload.assignedUserIds] : [],
       sendHistory: payload.sendHistory ?? [],
       invoiceNumber: payload.invoiceNumber ?? null,
       invoiceVatEnabled:
         Object.prototype.hasOwnProperty.call(payload, 'invoiceVatEnabled')
           ? payload.invoiceVatEnabled ?? null
+          : null,
+      quoteNumber: payload.quoteNumber ?? null,
+      quoteStatus:
+        Object.prototype.hasOwnProperty.call(payload, 'quoteStatus')
+          ? payload.quoteStatus ?? null
+          : payload.kind === 'devis'
+          ? 'brouillon'
+          : null,
+      mobileDurationMinutes:
+        Object.prototype.hasOwnProperty.call(payload, 'mobileDurationMinutes')
+          ? payload.mobileDurationMinutes ?? null
+          : null,
+      mobileCompletionComment:
+        Object.prototype.hasOwnProperty.call(payload, 'mobileCompletionComment')
+          ? payload.mobileCompletionComment ?? null
           : null,
       id: `e${Date.now()}`,
     };
@@ -2474,13 +2605,31 @@ export const useAppData = create<AppState>((set, get) => ({
         if (engagement.id !== engagementId) {
           return engagement;
         }
+        const optionIds = updates.optionIds ? [...updates.optionIds] : engagement.optionIds;
+        const overrides = sanitizeOptionOverrides(optionIds, updates.optionOverrides ?? engagement.optionOverrides);
         const next: Engagement = {
           ...engagement,
           ...updates,
+          optionIds,
+          optionOverrides: overrides,
           additionalCharge:
             updates.additionalCharge !== undefined ? updates.additionalCharge : engagement.additionalCharge,
           contactIds: updates.contactIds ? [...updates.contactIds] : engagement.contactIds,
           sendHistory: updates.sendHistory ? [...updates.sendHistory] : engagement.sendHistory,
+          assignedUserIds:
+            updates.assignedUserIds !== undefined
+              ? [...(updates.assignedUserIds ?? [])]
+              : engagement.assignedUserIds,
+          quoteNumber: updates.quoteNumber !== undefined ? updates.quoteNumber : engagement.quoteNumber,
+          quoteStatus: updates.quoteStatus !== undefined ? updates.quoteStatus : engagement.quoteStatus,
+          mobileDurationMinutes:
+            updates.mobileDurationMinutes !== undefined
+              ? updates.mobileDurationMinutes
+              : engagement.mobileDurationMinutes ?? null,
+          mobileCompletionComment:
+            updates.mobileCompletionComment !== undefined
+              ? updates.mobileCompletionComment
+              : engagement.mobileCompletionComment ?? null,
         };
         updated = next;
         return next;
@@ -2515,6 +2664,10 @@ export const useAppData = create<AppState>((set, get) => ({
           ...engagement,
           contactIds: mergedContacts,
           sendHistory: [record, ...engagement.sendHistory],
+          quoteStatus:
+            engagement.kind === 'devis' && engagement.quoteStatus !== 'accepté' && engagement.quoteStatus !== 'refusé'
+              ? 'envoyé'
+              : engagement.quoteStatus,
         };
       }),
     }));
@@ -2542,7 +2695,7 @@ export const useAppData = create<AppState>((set, get) => ({
   getServiceCategorySummary: () => {
     const { services, engagements } = get();
     const compute = get().computeEngagementTotals;
-    return ['Voiture', 'Canapé', 'Textile'].map((category) => {
+    return ['Voiture', 'Canapé', 'Textile', 'Autre'].map((category) => {
       const typedCategory = category as Service['category'];
       const catalog = services.filter((service) => service.category === typedCategory);
       const aggregate = catalog.reduce(
@@ -2769,9 +2922,22 @@ export const useAppData = create<AppState>((set, get) => ({
         if (service.id !== serviceId) {
           return service;
         }
+        const duration = Number.isFinite(payload.defaultDurationMin)
+          ? Math.max(0, payload.defaultDurationMin)
+          : 0;
+        const unitPrice = Number.isFinite(payload.unitPriceHT) ? Math.max(0, payload.unitPriceHT) : 0;
+        const tva =
+          payload.tvaPct === null || payload.tvaPct === undefined || Number.isNaN(payload.tvaPct)
+            ? null
+            : payload.tvaPct;
         created = {
           id: `opt${Date.now()}`,
-          ...payload,
+          label: payload.label.trim(),
+          description: payload.description?.trim() || undefined,
+          defaultDurationMin: duration,
+          unitPriceHT: unitPrice,
+          tvaPct: tva,
+          active: payload.active ?? true,
         };
         return {
           ...service,
@@ -2796,9 +2962,30 @@ export const useAppData = create<AppState>((set, get) => ({
           if (option.id !== optionId) {
             return option;
           }
+          const duration =
+            updates.defaultDurationMin !== undefined && Number.isFinite(updates.defaultDurationMin)
+              ? Math.max(0, updates.defaultDurationMin)
+              : option.defaultDurationMin;
+          const unitPrice =
+            updates.unitPriceHT !== undefined && Number.isFinite(updates.unitPriceHT)
+              ? Math.max(0, updates.unitPriceHT)
+              : option.unitPriceHT;
+          const tva =
+            Object.prototype.hasOwnProperty.call(updates, 'tvaPct')
+              ? updates.tvaPct === null || updates.tvaPct === undefined || Number.isNaN(updates.tvaPct)
+                ? null
+                : updates.tvaPct
+              : option.tvaPct ?? null;
           updated = {
             ...option,
             ...updates,
+            label: updates.label !== undefined ? updates.label.trim() : option.label,
+            description:
+              updates.description !== undefined ? updates.description?.trim() || undefined : option.description,
+            defaultDurationMin: duration,
+            unitPriceHT: unitPrice,
+            tvaPct: tva,
+            active: updates.active !== undefined ? updates.active : option.active,
           };
           return updated;
         });
@@ -2844,6 +3031,17 @@ export const useAppData = create<AppState>((set, get) => ({
     const size = payload.size?.trim() || undefined;
     const fileName = payload.fileName?.trim() || undefined;
     const fileData = payload.fileData?.trim() || undefined;
+    const kind = payload.kind ?? undefined;
+    const engagementId = payload.engagementId ?? null;
+    const number = payload.number ?? null;
+    const status = payload.status ?? null;
+    const totalHt = payload.totalHt ?? null;
+    const totalTtc = payload.totalTtc ?? null;
+    const vatAmount = payload.vatAmount ?? null;
+    const vatRate = payload.vatRate ?? null;
+    const issueDate = payload.issueDate ?? null;
+    const dueDate = payload.dueDate ?? null;
+    const recipients = payload.recipients ?? undefined;
     const newDocument: DocumentRecord = {
       id: `doc-${Date.now()}`,
       title,
@@ -2859,6 +3057,17 @@ export const useAppData = create<AppState>((set, get) => ({
       size,
       fileName,
       fileData,
+      kind,
+      engagementId,
+      number,
+      status,
+      totalHt,
+      totalTtc,
+      vatAmount,
+      vatRate,
+      issueDate,
+      dueDate,
+      recipients,
     };
     set((state) => ({
       documents: [newDocument, ...state.documents],
@@ -2903,6 +3112,39 @@ export const useAppData = create<AppState>((set, get) => ({
         const fileData = Object.prototype.hasOwnProperty.call(updates, 'fileData')
           ? updates.fileData?.trim() || undefined
           : document.fileData;
+        const kind = Object.prototype.hasOwnProperty.call(updates, 'kind')
+          ? updates.kind ?? undefined
+          : document.kind;
+        const engagementId = Object.prototype.hasOwnProperty.call(updates, 'engagementId')
+          ? updates.engagementId ?? null
+          : document.engagementId ?? null;
+        const number = Object.prototype.hasOwnProperty.call(updates, 'number')
+          ? updates.number ?? null
+          : document.number ?? null;
+        const status = Object.prototype.hasOwnProperty.call(updates, 'status')
+          ? updates.status ?? null
+          : document.status ?? null;
+        const totalHt = Object.prototype.hasOwnProperty.call(updates, 'totalHt')
+          ? updates.totalHt ?? null
+          : document.totalHt ?? null;
+        const totalTtc = Object.prototype.hasOwnProperty.call(updates, 'totalTtc')
+          ? updates.totalTtc ?? null
+          : document.totalTtc ?? null;
+        const vatAmount = Object.prototype.hasOwnProperty.call(updates, 'vatAmount')
+          ? updates.vatAmount ?? null
+          : document.vatAmount ?? null;
+        const vatRate = Object.prototype.hasOwnProperty.call(updates, 'vatRate')
+          ? updates.vatRate ?? null
+          : document.vatRate ?? null;
+        const issueDate = Object.prototype.hasOwnProperty.call(updates, 'issueDate')
+          ? updates.issueDate ?? null
+          : document.issueDate ?? null;
+        const dueDate = Object.prototype.hasOwnProperty.call(updates, 'dueDate')
+          ? updates.dueDate ?? null
+          : document.dueDate ?? null;
+        const recipients = Object.prototype.hasOwnProperty.call(updates, 'recipients')
+          ? updates.recipients ?? undefined
+          : document.recipients;
 
         const next: DocumentRecord = {
           ...document,
@@ -2920,6 +3162,17 @@ export const useAppData = create<AppState>((set, get) => ({
           size,
           fileName,
           fileData,
+          kind,
+          engagementId,
+          number,
+          status,
+          totalHt,
+          totalTtc,
+          vatAmount,
+          vatRate,
+          issueDate,
+          dueDate,
+          recipients,
         };
 
         updated = next;
@@ -3383,18 +3636,6 @@ export const useAppData = create<AppState>((set, get) => ({
       const nextMode: ThemeMode = state.theme === 'light' ? 'dark' : 'light';
       persistTheme(nextMode);
       return { theme: nextMode };
-    });
-  },
-  setBrandingColorId: (id) => {
-    set(() => {
-      persistBrandingColorId(id);
-      return { brandingColorId: id };
-    });
-  },
-  resetBrandingColor: () => {
-    set(() => {
-      persistBrandingColorId(DEFAULT_BRANDING_COLOR_ID);
-      return { brandingColorId: DEFAULT_BRANDING_COLOR_ID };
     });
   },
   setSidebarTitlePreference: (updates) => {

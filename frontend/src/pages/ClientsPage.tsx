@@ -1,6 +1,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -24,6 +25,7 @@ import {
   Note,
 } from '../store/useAppData';
 import { formatCurrency, formatDate } from '../lib/format';
+import { downloadCsv } from '../lib/csv';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { BRAND_NAME } from '../lib/branding';
 import { openEmailComposer } from '../lib/email';
@@ -58,19 +60,6 @@ const emptyContactForm = {
   roles: ['facturation'] as ClientContactRole[],
   isBillingDefault: false,
 };
-
-const buildCsvLine = (values: (string | number | null | undefined)[], separator: string) =>
-  values
-    .map((value) => {
-      if (value === null || value === undefined) {
-        return '';
-      }
-      const stringValue = String(value).replace(/"/g, '""');
-      return stringValue.includes(separator) || stringValue.includes('"')
-        ? `"${stringValue}"`
-        : stringValue;
-    })
-    .join(separator);
 
 const parseCsvLine = (line: string, separator: string) => {
   const cells: string[] = [];
@@ -201,6 +190,7 @@ const ClientsPage = () => {
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [importConfig, setImportConfig] = useState<ImportConfig | null>(null);
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   const creationSectionRef = useRef<HTMLDivElement | null>(null);
   const detailSectionRef = useRef<HTMLDivElement | null>(null);
   const detailFocusRef = useRef<HTMLDivElement | null>(null);
@@ -224,6 +214,12 @@ const ClientsPage = () => {
     clearUndo();
     setFeedback(message);
   };
+
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const sortedClients = useMemo(
     () =>
@@ -540,7 +536,9 @@ const ClientsPage = () => {
       setCreationOpen(false);
       setClientForm(emptyClientForm);
       setCreationContactForm(emptyContactForm);
-      setSelectedClientId(created.id);
+      setSelectedClientId(null);
+      setSelectedClientIds([]);
+      scrollToList();
     } finally {
       setIsSubmitting(false);
     }
@@ -686,64 +684,75 @@ const ClientsPage = () => {
 
   const handleExport = () => {
     if (!filteredClients.length) {
+      setFeedback('Aucun client à exporter.');
       return;
     }
-    const separator = ';';
-    const header = buildCsvLine(
-      [
-        'Organisation',
-        'SIRET',
-        'Email organisation',
-        'Téléphone organisation',
-        'Adresse',
-        'Ville',
-        'Statut',
-        'Tags',
-        'Contact prénom',
-        'Contact nom',
-        'Contact email',
-        'Contact mobile',
-        'Rôles',
-        'Contact facturation',
-      ],
-      separator
-    );
-    const rows: string[] = [];
-    filteredClients.forEach((client) => {
-      client.contacts.forEach((contact) => {
-        rows.push(
-          buildCsvLine(
-            [
-              client.name,
-              client.siret,
-              client.email,
-              client.phone,
-              client.address,
-              client.city,
-              client.status,
-              client.tags.join(', '),
-              contact.firstName,
-              contact.lastName,
-              contact.email,
-              contact.mobile,
-              contact.roles.join(', '),
-              contact.isBillingDefault ? 'Oui' : 'Non',
-            ],
-            separator
-          )
-        );
-      });
+
+    const header = [
+      'Organisation',
+      'Type',
+      'Nom entreprise',
+      'Prénom',
+      'Nom',
+      'SIRET',
+      'Email organisation',
+      'Téléphone organisation',
+      'Adresse',
+      'Ville',
+      'Statut',
+      'Tags',
+      'Contacts actifs',
+      'Détails contacts',
+      'Contact facturation',
+      'Dernière prestation',
+      'Chiffre d’affaires HT',
+    ];
+
+    const rows = filteredClients.map((client) => {
+      const activeContacts = client.contacts.filter((contact) => contact.active);
+      const billing = activeContacts.find((contact) => contact.isBillingDefault);
+      const revenue = revenueByClient.get(client.id) ?? 0;
+      const contactSummary = activeContacts
+        .map((contact) => {
+          const name = `${contact.firstName} ${contact.lastName}`.trim();
+          const coordinates = [contact.email, contact.mobile].filter(Boolean).join(' / ');
+          const roles = contact.roles.length ? `Rôles : ${contact.roles.join(', ')}` : '';
+          const billingLabel = contact.isBillingDefault ? 'Contact facturation' : '';
+          return [name || 'Contact', coordinates, roles, billingLabel].filter(Boolean).join(' – ');
+        })
+        .join(' | ');
+      const billingLabel = billing
+        ? [
+            `${billing.firstName} ${billing.lastName}`.trim(),
+            billing.email ? `<${billing.email}>` : null,
+            billing.mobile ? `(${billing.mobile})` : null,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : '';
+      return [
+        client.name,
+        client.type === 'company' ? 'Entreprise' : 'Particulier',
+        client.companyName ?? '',
+        client.firstName ?? '',
+        client.lastName ?? '',
+        client.siret,
+        client.email,
+        client.phone,
+        client.address,
+        client.city,
+        client.status,
+        client.tags.join(', '),
+        activeContacts.length,
+        contactSummary,
+        billingLabel,
+        client.lastService ? formatDate(client.lastService) : '',
+        formatCurrency(revenue),
+      ];
     });
-    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'clients_contacts.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    notify('Export CSV généré.');
+
+    downloadCsv({ fileName: 'clients.csv', header, rows });
+    setFeedback(`${rows.length} client(s) exporté(s).`);
   };
   const openImportConfigurator = async (file: File) => {
     const text = await file.text();
@@ -1167,7 +1176,8 @@ const ClientsPage = () => {
         </div>
       )}
 
-      <Card padding="sm" className="space-y-4">
+      <div ref={listSectionRef}>
+        <Card padding="sm" className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1 text-xs text-slate-600">
@@ -1307,7 +1317,8 @@ const ClientsPage = () => {
           }}
           rowClassName={clientRowClassName}
         />
-      </Card>
+        </Card>
+      </div>
 
       {creationOpen && (
         <div ref={creationSectionRef}>

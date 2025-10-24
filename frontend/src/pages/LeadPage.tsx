@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 
@@ -8,6 +8,7 @@ import { Table } from '../components/Table';
 import { RowActionButton } from '../components/RowActionButton';
 import { IconConvert, IconEdit, IconPaperPlane, IconTrash } from '../components/icons';
 import { formatCurrency, formatDateTime } from '../lib/format';
+import { downloadCsv } from '../lib/csv';
 import { BRAND_NAME } from '../lib/branding';
 import {
   useAppData,
@@ -86,20 +87,6 @@ const buildFormState = (
 
 const normalisePhone = (value: string) => value.replace(/\s+/g, '').trim();
 
-const buildCsvLine = (values: (string | number | null | undefined)[], separator: string) =>
-  values
-    .map((value) => {
-      if (value === null || value === undefined) {
-        return '';
-      }
-      const stringValue = String(value).replace(/"/g, '""');
-      if (stringValue.includes(separator) || stringValue.includes('"')) {
-        return `"${stringValue}"`;
-      }
-      return stringValue;
-    })
-    .join(separator);
-
 const statusTone: Record<LeadStatus, string> = {
   Nouveau: 'border-primary/30 text-primary',
   'À contacter': 'border-slate-300 text-slate-700',
@@ -148,6 +135,7 @@ const LeadPage = () => {
   const [noteDraft, setNoteDraft] = useState('');
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
 
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   const createSectionRef = useRef<HTMLDivElement | null>(null);
   const editSectionRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -171,6 +159,10 @@ const LeadPage = () => {
 
   const defaultOwner = owners[0] ?? 'Adrien';
   const defaultCompanyId = companies[0]?.id ?? null;
+  const companiesById = useMemo(
+    () => new Map(companies.map((company) => [company.id, company])),
+    [companies]
+  );
 
   const [leadForm, setLeadForm] = useState<LeadFormState>(
     buildFormState(null, defaultOwner, defaultCompanyId)
@@ -292,6 +284,12 @@ const LeadPage = () => {
     setNoteDraft('');
   };
 
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
   const mapFormToPayload = () => {
     const tags = leadForm.tags
       .split(',')
@@ -340,6 +338,7 @@ const LeadPage = () => {
     setFeedback('Lead créé.');
     setSelectedLeadIds((ids) => [created.id, ...ids]);
     closePanels();
+    scrollToList();
   };
 
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -581,55 +580,67 @@ const LeadPage = () => {
   };
 
   const handleExport = () => {
-    const separator = ';';
-    const header = buildCsvLine(
-      [
-        'Entreprise',
-        'Contact',
-        'Téléphone',
-        'Email',
-        'Source',
-        'Segment',
-        'Statut',
-        'Prochain step date',
-        'Prochain step note',
-        'Dernier contact',
-        'Valeur',
-        'Propriétaire',
-        'Tags',
-      ],
-      separator
-    );
-    const rows = leads.map((lead) =>
-      buildCsvLine(
-        [
-          lead.company,
-          lead.contact,
-          lead.phone,
-          lead.email,
-          lead.source,
-          lead.segment,
-          lead.status,
-          lead.nextStepDate ?? '',
-          lead.nextStepNote,
-          lead.lastContact ?? '',
-          lead.estimatedValue ?? '',
-          lead.owner,
-          lead.tags.join(', '),
-        ],
-        separator
-      )
-    );
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'leads.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    if (!filteredLeads.length) {
+      setFeedback('Aucun lead à exporter.');
+      return;
+    }
+
+    const header = [
+      'Entreprise',
+      'Contact',
+      'Téléphone',
+      'Email',
+      'Source',
+      'Segment',
+      'Statut',
+      'Prochain step',
+      'Note prochaine étape',
+      'Dernier contact',
+      'Valeur estimée',
+      'Propriétaire',
+      'Tags',
+      'Adresse',
+      'Organisation associée',
+      'Support',
+      'Détail support',
+      'Créé le',
+      'Activités',
+    ];
+
+    const rows = filteredLeads.map((lead) => {
+      const linkedCompany = lead.companyId ? companiesById.get(lead.companyId) : null;
+      const activitiesSummary = lead.activities
+        .map((activity) => {
+          const dateLabel = formatDateTime(activity.createdAt);
+          const label = activity.type === 'call' ? 'Appel' : 'Note';
+          return `[${dateLabel}] ${label} – ${activity.content}`;
+        })
+        .join(' | ');
+      return [
+        lead.company,
+        lead.contact,
+        lead.phone,
+        lead.email,
+        lead.source,
+        lead.segment,
+        lead.status,
+        lead.nextStepDate ? formatDateTime(lead.nextStepDate) : '',
+        lead.nextStepNote,
+        lead.lastContact ? formatDateTime(lead.lastContact) : '',
+        lead.estimatedValue ?? '',
+        lead.owner,
+        lead.tags.join(', '),
+        lead.address ?? '',
+        linkedCompany?.name ?? '',
+        lead.supportType ?? '',
+        lead.supportDetail ?? '',
+        formatDateTime(lead.createdAt),
+        activitiesSummary,
+      ];
+    });
+
+    downloadCsv({ fileName: 'leads.csv', header, rows });
+    setFeedback(`${rows.length} lead(s) exporté(s).`);
   };
 
   const toggleSelection = (leadId: string) => {
@@ -1062,8 +1073,9 @@ const LeadPage = () => {
           )}
         </div>
 
-        {view === 'table' ? (
-          <div className="mt-6 space-y-4">
+        <div ref={listSectionRef}>
+          {view === 'table' ? (
+            <div className="mt-6 space-y-4">
             <div className="hidden md:block">
               <Table
                 columns={tableColumns}
@@ -1202,6 +1214,7 @@ const LeadPage = () => {
         ) : (
           kanban
         )}
+        </div>
       </Card>
 
       {activePanel === 'create' && (

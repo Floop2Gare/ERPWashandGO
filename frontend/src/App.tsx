@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Layout } from './layout/Layout';
 import DashboardPage from './pages/DashboardPage';
@@ -13,9 +13,38 @@ import DocumentsPage from './pages/DocumentsPage';
 import LoginPage from './pages/LoginPage';
 import UsersAdminPage from './pages/UsersAdminPage';
 import { useAppData } from './store/useAppData';
-import { applyBrandingColorToDocument } from './lib/branding';
 import { SIDEBAR_NAVIGATION_LINKS } from './layout/navigationLinks';
 import type { AppPageKey } from './lib/rbac';
+import MobileTestPage from './pages/MobileTestPage';
+
+const detectMobileUserAgent = (userAgent: string) =>
+  /android|iphone|ipad|ipod|mobile|blackberry|iemobile|opera mini/i.test(
+    userAgent
+  );
+
+const shouldRenderMobile = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const forcedUi = params.get('ui');
+
+  if (forcedUi === 'mobile') {
+    return true;
+  }
+
+  if (forcedUi === 'desktop') {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent || navigator.vendor || '';
+  if (detectMobileUserAgent(userAgent)) {
+    return true;
+  }
+
+  return window.matchMedia('(max-width: 768px)').matches;
+};
 
 const PrivateLayout = () => {
   const isAuthenticated = useAppData((state) => state.currentUserId !== null);
@@ -55,7 +84,7 @@ const RequirePage = ({ page, children }: { page: AppPageKey; children: JSX.Eleme
 const App = () => {
   const isAuthenticated = useAppData((state) => state.currentUserId !== null);
   const theme = useAppData((state) => state.theme);
-  const brandingColorId = useAppData((state) => state.brandingColorId);
+  const [renderMobileUI, setRenderMobileUI] = useState(false);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -63,18 +92,35 @@ const App = () => {
     }
     const body = document.body;
     const root = document.documentElement;
-    body.classList.remove('washingo-light', 'washingo-dark');
-    body.classList.add(theme === 'dark' ? 'washingo-dark' : 'washingo-light');
-    root.classList.remove('washingo-light', 'washingo-dark');
-    root.classList.add(theme === 'dark' ? 'washingo-dark' : 'washingo-light');
-    root.classList.toggle('dark', theme === 'dark');
     root.setAttribute('data-theme', theme);
+    root.classList.toggle('dark', theme === 'dark');
     root.style.colorScheme = theme;
+    body.setAttribute('data-theme', theme);
   }, [theme]);
 
   useEffect(() => {
-    applyBrandingColorToDocument(brandingColorId);
-  }, [brandingColorId]);
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const evaluate = () => {
+      setRenderMobileUI(shouldRenderMobile());
+    };
+
+    evaluate();
+
+    window.addEventListener('resize', evaluate);
+    window.addEventListener('orientationchange', evaluate);
+
+    return () => {
+      window.removeEventListener('resize', evaluate);
+      window.removeEventListener('orientationchange', evaluate);
+    };
+  }, []);
+
+  if (renderMobileUI) {
+    return <MobileTestPage />;
+  }
 
   return (
     <Routes>

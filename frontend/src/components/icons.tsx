@@ -77,6 +77,15 @@ export const IconNavSettings = ({ className }: IconProps) => (
   </svg>
 );
 
+export const IconNavUsers = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className ?? 'h-5 w-5'} fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <path d="M8 9.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M5.5 19.5a4.5 4.5 0 0 1 13 0" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M17.5 10a2.5 2.5 0 1 1-2-4" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4 19.5a3.5 3.5 0 0 1 5-3.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export const IconEdit = () => (
   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.4}>
     <path d="M4 13.5V16h2.5L15 7.5 12.5 5 4 13.5z" strokeLinecap="round" strokeLinejoin="round" />

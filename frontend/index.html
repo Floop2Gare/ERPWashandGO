@@ -6,39 +6,20 @@
     <link rel="icon" href="data:," />
     <title>Wash&amp;Go App</title>
   </head>
-  <body class="washingo-light">
+  <body>
     <script>
       (function () {
         const themeKeys = ['washandgo-theme', 'washingo-theme', 'washango-theme'];
-        const accentKeys = ['washandgo:accent', 'washingo:accent', 'washango:accent'];
-        const accentOptions = {
-          black: { light: '#111111', dark: '#f4f5f7' },
-          blue: { light: '#0049ac', dark: '#9bbdff' },
-          orange: { light: '#ff7a00', dark: '#ffae66' },
-          green: { light: '#1a7f37', dark: '#5de095' },
-          charcoal: { light: '#2b2b2b', dark: '#d2d7e0' },
-        };
-        const defaultAccent = 'blue';
         const storedTheme = themeKeys
           .map((key) => window.localStorage.getItem(key))
           .find((value) => value === 'light' || value === 'dark');
         const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         const theme = storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : prefersDark ? 'dark' : 'light';
-        const storedAccentKey = accentKeys.map((key) => window.localStorage.getItem(key)).find(Boolean) || defaultAccent;
-        const accent = accentOptions[storedAccentKey] || accentOptions[defaultAccent];
-        const body = document.body;
         const root = document.documentElement;
-        body.classList.remove('washingo-light', 'washingo-dark');
-        body.classList.add(theme === 'dark' ? 'washingo-dark' : 'washingo-light');
-        root.classList.remove('washingo-light', 'washingo-dark');
-        root.classList.add(theme === 'dark' ? 'washingo-dark' : 'washingo-light');
-        root.classList.toggle('dark', theme === 'dark');
         root.setAttribute('data-theme', theme);
         root.style.colorScheme = theme;
-        root.style.setProperty('--washingo-heading-color', accent.light);
-        root.style.setProperty('--washingo-accent-color', accent.light);
-        root.style.setProperty('--washingo-heading-color-dark', accent.dark);
-        root.style.setProperty('--washingo-accent-color-dark', accent.dark);
+        root.classList.toggle('dark', theme === 'dark');
+        document.body.setAttribute('data-theme', theme);
       })();
     </script>
     <div id="root"></div>

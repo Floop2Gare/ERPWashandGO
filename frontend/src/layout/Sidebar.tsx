@@ -19,6 +19,7 @@ interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
   onNavigate?: () => void;
+  compact?: boolean;
 }
 
 const moveItem = (items: SidebarNavigationLink[], from: number, to: number) => {
@@ -28,7 +29,13 @@ const moveItem = (items: SidebarNavigationLink[], from: number, to: number) => {
   return next;
 };
 
-export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate }: SidebarProps) => {
+export const Sidebar = ({
+  variant = 'desktop',
+  open = false,
+  onClose,
+  onNavigate,
+  compact = false,
+}: SidebarProps) => {
   const { order, setOrder, resetOrder, ensureLatest } = useSidebarNavigationStore((state) => ({
     order: state.order,
     setOrder: state.setOrder,
@@ -38,12 +45,33 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
 
   const sidebarTitlePreference = useAppData((state) => state.sidebarTitlePreference);
   const hasPageAccess = useAppData((state) => state.hasPageAccess);
+  const companies = useAppData((state) => state.companies);
+  const activeCompanyId = useAppData((state) => state.activeCompanyId);
   const baseline = BRAND_BASELINE.trim();
   const showBaselineText = baseline.length > 0;
 
   useEffect(() => {
     ensureLatest();
   }, [ensureLatest]);
+
+  const activeCompany = useMemo(() => {
+    if (!companies.length) {
+      return null;
+    }
+    return companies.find((company) => company.id === activeCompanyId) ?? companies[0];
+  }, [companies, activeCompanyId]);
+
+  const brandInitials = useMemo(() => {
+    const source = activeCompany?.name?.trim() || BRAND_NAME;
+    const chunks = source
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((chunk) => chunk.charAt(0).toUpperCase());
+    if (chunks.length === 0) {
+      return 'WA';
+    }
+    return chunks.slice(0, 2).join('');
+  }, [activeCompany]);
 
   const orderedLinks = useMemo(() => {
     const linkMap = new Map(SIDEBAR_NAVIGATION_LINKS.map((link) => [link.to, link]));
@@ -170,53 +198,62 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
   const draggingKey = draggingKeyState;
 
   const showSidebarHeader = !sidebarTitlePreference.hidden;
-  const sidebarTitle = sidebarTitlePreference.text?.trim() ?? '';
+  const isCollapsed = variant === 'desktop' && compact && !isEditing;
 
   const content = (
     <div
       className={clsx(
-        'sidebar-surface flex h-full min-h-screen flex-col overflow-y-auto px-5 pb-10 pt-8',
-        variant === 'mobile' && 'sidebar-surface--mobile'
+        'sidebar-surface flex h-full min-h-screen flex-col overflow-y-auto pb-10 pt-8',
+        variant === 'mobile' ? 'px-5 sidebar-surface--mobile' : 'px-5',
+        isCollapsed && 'sidebar-surface--collapsed'
       )}
+      data-collapsed={isCollapsed ? 'true' : undefined}
     >
       <div className="mb-8 space-y-4">
         <div className="flex items-center gap-3">
-          <span
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-3xl text-base font-semibold text-white shadow-[0_12px_28px_rgba(0,73,172,0.28)] ring-1 ring-white/40 dark:ring-white/15"
-            aria-hidden="true"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(0,73,172,0.95) 0%, rgba(72,128,255,0.95) 55%, rgba(139,181,255,0.9) 100%)',
-            }}
-          >
-            WA
-          </span>
+          <div className="sidebar-brand flex h-12 w-12 flex-shrink-0 items-center justify-center" aria-hidden="true">
+            {activeCompany?.logoUrl ? (
+              <img
+                src={activeCompany.logoUrl}
+                alt={`Logo ${activeCompany.name}`}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span className="sidebar-brand__fallback" aria-hidden>
+                {brandInitials}
+              </span>
+            )}
+          </div>
           {showSidebarHeader && (
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary/90 dark:text-slate-300">
+            <div className="sidebar-header-text min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: 'var(--txt-accent)' }}>
                 {BRAND_NAME}
               </p>
-              {sidebarTitle && (
-                <h1 className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{sidebarTitle}</h1>
+              {showBaselineText && (
+                <p className="text-xs" style={{ color: 'var(--txt-muted)' }}>
+                  {baseline}
+                </p>
               )}
-              {showBaselineText && <p className="text-xs text-slate-500 dark:text-slate-400">{baseline}</p>}
             </div>
           )}
         </div>
         {variant === 'mobile' && (
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Navigation</span>
+              <span className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--txt-muted)' }}>
+                Navigation
+              </span>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-500 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                style={{ color: 'var(--txt-accent)' }}
             >
               Fermer
             </button>
           </div>
         )}
       </div>
-      <nav className="space-y-4 text-sm font-medium text-slate-600">
+      <nav className="space-y-4 text-sm font-medium">
         <ul className="space-y-1.5">
           {displayedLinks.map((link, index) => {
             return (
@@ -232,28 +269,26 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                     onDrop={handleDrop}
                     onKeyDown={handleItemKeyDown(index)}
                     className={clsx(
-                      'sidebar-reorder group flex items-center justify-between rounded-2xl px-3 py-2 text-slate-600 transition-all duration-150 ease-out dark:text-slate-200',
-                      draggingKey === link.to
-                        ? 'ring-1 ring-primary/40 shadow-[0_8px_18px_rgba(0,73,172,0.25)]'
-                        : 'hover:text-primary dark:hover:text-primary'
+                      'sidebar-reorder group flex items-center justify-between rounded-2xl px-3 py-2 transition-all duration-150 ease-out',
+                      draggingKey === link.to ? 'ring-1 ring-primary/40' : undefined
                     )}
                     aria-grabbed={draggingKey === link.to}
                     aria-label={`Réordonner ${link.label}`}
                   >
                     <div className="flex items-center gap-3">
-                      <span
-                        className="select-none text-base text-slate-400 transition group-active:text-primary"
-                        aria-hidden
-                      >
-                        ≡
-                      </span>
-                      <span className="tracking-[0.06em] text-slate-600 dark:text-slate-200">{link.label}</span>
+                        <span className="select-none text-base" aria-hidden style={{ color: 'var(--txt-muted)' }}>
+                          ≡
+                        </span>
+                        <span className="tracking-[0.06em]" style={{ color: 'var(--txt-primary)' }}>
+                          {link.label}
+                        </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
                       type="button"
                       onClick={() => handleMoveUp(index)}
-                      className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+                      className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"
+                      style={{ color: 'var(--txt-accent)' }}
                       disabled={index === 0}
                       aria-label={`Déplacer ${link.label} vers le haut`}
                     >
@@ -262,7 +297,8 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                     <button
                       type="button"
                       onClick={() => handleMoveDown(index)}
-                      className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+                      className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"
+                      style={{ color: 'var(--txt-accent)' }}
                       disabled={index === displayedLinks.length - 1}
                       aria-label={`Déplacer ${link.label} vers le bas`}
                     >
@@ -271,40 +307,39 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
                   </div>
                 </div>
                 ) : (
-                  <NavLink
-                    to={link.to}
-                    end={link.to === '/'}
-                    className={({ isActive }) =>
-                      clsx(
-                        'sidebar-link group flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold tracking-wide transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-                        isActive ? 'sidebar-link--active' : 'sidebar-link--idle'
-                      )
-                    }
-                    onClick={handleNavigate}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <span className="flex-1 truncate text-[13px] font-semibold tracking-wide dark:text-slate-100">
-                          {link.label}
-                        </span>
-                        <span
-                          className={clsx(
-                            'h-1.5 w-1.5 flex-shrink-0 rounded-full transition-colors duration-200 ease-out',
-                            isActive
-                              ? 'bg-white/90 shadow-[0_0_0_2px_rgba(255,255,255,0.3)] dark:bg-white/80'
-                              : 'bg-slate-300 group-hover:bg-primary/60 dark:bg-slate-600 dark:group-hover:bg-white/70'
-                          )}
-                          aria-hidden
-                        />
-                      </>
+                  <div className="sidebar-link-wrapper group">
+                    <NavLink
+                      to={link.to}
+                      end={link.to === '/'}
+                      aria-label={link.label}
+                      title={isCollapsed ? link.label : undefined}
+                      className={({ isActive }) =>
+                        clsx(
+                          'sidebar-link flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                          isActive ? 'sidebar-link--active' : 'sidebar-link--idle'
+                        )
+                      }
+                      onClick={handleNavigate}
+                    >
+                      <span className="sidebar-link__initial" aria-hidden="true">
+                        {link.label.trim().charAt(0).toUpperCase() || '•'}
+                      </span>
+                      <span className="sidebar-link__label flex-1 truncate text-[13px] font-semibold tracking-wide">
+                        {link.label}
+                      </span>
+                    </NavLink>
+                    {isCollapsed && (
+                      <span className="sidebar-link__tooltip" role="tooltip">
+                        {link.label}
+                      </span>
                     )}
-                  </NavLink>
+                  </div>
                 )}
               </li>
             );
           })}
         </ul>
-        <div className="flex flex-wrap items-center gap-2 pt-2">
+        <div className="sidebar-footer-actions flex flex-wrap items-center gap-2 pt-2">
           {isEditing ? (
             <>
               <button
@@ -333,9 +368,12 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
             <button
               type="button"
               onClick={handleStartEditing}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600 transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              style={{ color: 'var(--txt-accent)' }}
             >
-              <span aria-hidden className="text-sm text-slate-400">≡</span>
+              <span aria-hidden className="text-sm" style={{ color: 'var(--txt-muted)' }}>
+                ≡
+              </span>
               Modifier l'ordre
             </button>
           )}
@@ -375,5 +413,15 @@ export const Sidebar = ({ variant = 'desktop', open = false, onClose, onNavigate
     );
   }
 
-  return <aside className="hidden w-64 flex-shrink-0 lg:block">{content}</aside>;
+  return (
+    <aside
+      className={clsx(
+        'sidebar-desktop hidden flex-shrink-0 transition-[width] duration-200 lg:block',
+        isCollapsed ? 'sidebar-desktop--collapsed' : 'sidebar-desktop--expanded'
+      )}
+      data-collapsed={isCollapsed ? 'true' : undefined}
+    >
+      {content}
+    </aside>
+  );
 };

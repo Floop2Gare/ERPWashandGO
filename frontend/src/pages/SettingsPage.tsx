@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { format } from 'date-fns';
@@ -13,17 +13,22 @@ import {
   Company,
   EmailSignature,
   EmailSignatureScope,
+  Service,
+  ServiceOption,
+  ServiceCategory,
   SidebarTitlePreference,
   UserProfile,
   useAppData,
 } from '../store/useAppData';
-import { IconEdit, IconPlus, IconTrash } from '../components/icons';
+import { IconDuplicate, IconEdit, IconPlus, IconTrash } from '../components/icons';
 import { BRAND_BASELINE, BRAND_FULL_TITLE, BRAND_NAME } from '../lib/branding';
+import { formatCurrency } from '../lib/format';
 
 const sections = [
   { id: 'profile', label: 'Profil utilisateur' },
   { id: 'companies', label: 'Entreprises' },
   { id: 'signatures', label: 'Signatures e-mail' },
+  { id: 'catalog', label: 'Services & Produits' },
   { id: 'sidebarTitle', label: 'Titre Sidebar' },
 ] as const;
 
@@ -74,6 +79,25 @@ type SidebarTitleFormState = {
   hidden: boolean;
 };
 
+type CatalogServiceFormState = {
+  id: string | null;
+  name: string;
+  category: ServiceCategory;
+  description: string;
+  active: boolean;
+};
+
+type CatalogItemFormState = {
+  id: string | null;
+  serviceId: string;
+  label: string;
+  description: string;
+  defaultDurationMin: string;
+  unitPriceHT: string;
+  tvaPct: string;
+  active: boolean;
+};
+
 const SIGNATURE_VARIABLES = [
   { token: '{nom}', label: 'Nom complet' },
   { token: '{fonction}', label: 'Fonction' },
@@ -81,6 +105,13 @@ const SIGNATURE_VARIABLES = [
   { token: '{email}', label: 'E-mail' },
   { token: '{entreprise}', label: 'Entreprise' },
   { token: '{site}', label: 'Site web' },
+];
+
+const CATALOG_CATEGORIES: { value: ServiceCategory; label: string }[] = [
+  { value: 'Voiture', label: 'Voiture' },
+  { value: 'Canapé', label: 'Canapé' },
+  { value: 'Textile', label: 'Textile' },
+  { value: 'Autre', label: 'Autre' },
 ];
 
 const fieldLabelClass =
@@ -152,6 +183,30 @@ const buildSidebarTitleForm = (preference: SidebarTitlePreference | null): Sideb
   hidden: preference?.hidden ?? false,
 });
 
+const buildCatalogServiceForm = (service: Service | null): CatalogServiceFormState => ({
+  id: service?.id ?? null,
+  name: service?.name ?? '',
+  category: service?.category ?? 'Voiture',
+  description: service?.description ?? '',
+  active: service?.active ?? true,
+});
+
+const buildCatalogItemForm = (serviceId: string, option: ServiceOption | null): CatalogItemFormState => ({
+  id: option?.id ?? null,
+  serviceId,
+  label: option?.label ?? '',
+  description: option?.description ?? '',
+  defaultDurationMin:
+    option?.defaultDurationMin !== undefined && option?.defaultDurationMin !== null
+      ? String(option.defaultDurationMin)
+      : '',
+  unitPriceHT:
+    option?.unitPriceHT !== undefined && option?.unitPriceHT !== null ? String(option.unitPriceHT) : '',
+  tvaPct:
+    option?.tvaPct !== undefined && option?.tvaPct !== null ? String(option.tvaPct) : '',
+  active: option?.active ?? true,
+});
+
 const getInitials = (firstName: string, lastName: string) => {
   const first = firstName?.trim().charAt(0).toUpperCase() ?? '';
   const last = lastName?.trim().charAt(0).toUpperCase() ?? '';
@@ -162,12 +217,17 @@ type DetailState =
   | { section: 'profile'; mode: 'edit' }
   | { section: 'companies'; mode: 'create' | 'edit'; companyId: string | null }
   | { section: 'signatures'; mode: 'create' | 'edit'; signatureId: string | null }
+  | { section: 'catalog'; mode: 'create-service' }
+  | { section: 'catalog'; mode: 'edit-service'; serviceId: string }
+  | { section: 'catalog'; mode: 'create-item'; serviceId: string }
+  | { section: 'catalog'; mode: 'edit-item'; serviceId: string; itemId: string }
   | { section: 'sidebarTitle'; mode: 'edit' };
 
 const detailAnchors: Record<DetailState['section'], string> = {
   profile: 'profil',
   companies: 'entreprise',
   signatures: 'signature',
+  catalog: 'catalogue',
   sidebarTitle: 'sidebar-title',
 };
 
@@ -183,6 +243,13 @@ const SettingsPage = () => {
     addCompany,
     updateCompany,
     removeCompany,
+    services,
+    addService,
+    updateService,
+    removeService,
+    addServiceOption,
+    updateServiceOption,
+    removeServiceOption,
     activeCompanyId,
     setActiveCompany,
     setVatEnabled,
@@ -220,6 +287,7 @@ const SettingsPage = () => {
   const profileSectionRef = useRef<HTMLDivElement | null>(null);
   const companiesSectionRef = useRef<HTMLDivElement | null>(null);
   const signaturesSectionRef = useRef<HTMLDivElement | null>(null);
+  const catalogSectionRef = useRef<HTMLDivElement | null>(null);
   const sidebarTitleSectionRef = useRef<HTMLDivElement | null>(null);
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
   const detailHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -239,9 +307,41 @@ const SettingsPage = () => {
   const [sidebarTitleForm, setSidebarTitleForm] = useState<SidebarTitleFormState>(() =>
     buildSidebarTitleForm(sidebarTitlePreference)
   );
+  const [catalogServiceForm, setCatalogServiceForm] = useState<CatalogServiceFormState>(() =>
+    buildCatalogServiceForm(null)
+  );
+  const [catalogItemForm, setCatalogItemForm] = useState<CatalogItemFormState>(() =>
+    buildCatalogItemForm(services[0]?.id ?? '', null)
+  );
+  const [selectedCatalogServiceId, setSelectedCatalogServiceId] = useState<string | null>(
+    services[0]?.id ?? null
+  );
+  const [catalogServiceQuery, setCatalogServiceQuery] = useState('');
+  const [catalogItemQuery, setCatalogItemQuery] = useState('');
+  const [catalogServiceSort, setCatalogServiceSort] = useState<{
+    key: 'name' | 'category' | 'active' | 'count';
+    direction: 'asc' | 'desc';
+  }>({ key: 'name', direction: 'asc' });
+  const [catalogItemSort, setCatalogItemSort] = useState<{
+    key: 'label' | 'duration' | 'price' | 'active' | 'tva';
+    direction: 'asc' | 'desc';
+  }>({ key: 'label', direction: 'asc' });
   useEffect(() => {
     setProfileForm(buildProfileForm(userProfile));
   }, [userProfile]);
+
+  useEffect(() => {
+    if (!services.length) {
+      setSelectedCatalogServiceId(null);
+      return;
+    }
+    setSelectedCatalogServiceId((current) => {
+      if (current && services.some((service) => service.id === current)) {
+        return current;
+      }
+      return services[0].id;
+    });
+  }, [services]);
 
   useEffect(() => {
     if (detailState?.section !== 'profile' && avatarFileInputRef.current) {
@@ -258,6 +358,135 @@ const SettingsPage = () => {
     }
   }, [detailState, sidebarTitlePreference]);
 
+  const selectedCatalogService = useMemo(() => {
+    if (!services.length) {
+      return null;
+    }
+    if (selectedCatalogServiceId) {
+      return services.find((service) => service.id === selectedCatalogServiceId) ?? services[0];
+    }
+    return services[0];
+  }, [selectedCatalogServiceId, services]);
+
+  useEffect(() => {
+    if (detailState?.section !== 'catalog') {
+      setCatalogServiceForm(buildCatalogServiceForm(null));
+      if (selectedCatalogService) {
+        setCatalogItemForm((form) => ({
+          ...buildCatalogItemForm(selectedCatalogService.id, null),
+          serviceId: selectedCatalogService.id,
+        }));
+      }
+      return;
+    }
+
+    if (detailState.mode === 'create-service') {
+      setCatalogServiceForm(buildCatalogServiceForm(null));
+    } else if (detailState.mode === 'edit-service') {
+      const targetService = services.find((service) => service.id === detailState.serviceId) ?? null;
+      setCatalogServiceForm(buildCatalogServiceForm(targetService));
+    }
+
+    if (detailState.mode === 'create-item') {
+      setCatalogItemForm(buildCatalogItemForm(detailState.serviceId, null));
+    } else if (detailState.mode === 'edit-item') {
+      const parentService = services.find((service) => service.id === detailState.serviceId) ?? null;
+      const targetOption = parentService?.options.find((option) => option.id === detailState.itemId) ?? null;
+      setCatalogItemForm(buildCatalogItemForm(detailState.serviceId, targetOption));
+    }
+  }, [detailState, services, selectedCatalogService]);
+
+  const vatGloballyEnabled = useMemo(
+    () => companies.some((company) => company.vatEnabled),
+    [companies]
+  );
+
+  const normalizedServiceQuery = catalogServiceQuery.trim().toLowerCase();
+  const normalizedItemQuery = catalogItemQuery.trim().toLowerCase();
+
+  const sortedCatalogServices = useMemo(() => {
+    const filtered = services.filter((service) => {
+      if (!normalizedServiceQuery) {
+        return true;
+      }
+      const haystack = [
+        service.name,
+        service.description ?? '',
+        service.category,
+      ]
+        .map((value) => value.toLowerCase());
+      return haystack.some((value) => value.includes(normalizedServiceQuery));
+    });
+    const factor = catalogServiceSort.direction === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (catalogServiceSort.key) {
+        case 'name':
+          return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }) * factor;
+        case 'category':
+          return a.category.localeCompare(b.category, 'fr', { sensitivity: 'base' }) * factor;
+        case 'active': {
+          const aVal = a.active ? 1 : 0;
+          const bVal = b.active ? 1 : 0;
+          return (bVal - aVal) * factor;
+        }
+        case 'count':
+          return (a.options.length - b.options.length) * factor;
+        default:
+          return 0;
+      }
+    });
+  }, [services, normalizedServiceQuery, catalogServiceSort]);
+
+  const sortedCatalogItems = useMemo(() => {
+    if (!selectedCatalogService) {
+      return [] as ServiceOption[];
+    }
+    const base = selectedCatalogService.options.filter((option) => {
+      if (!normalizedItemQuery) {
+        return true;
+      }
+      const haystack = [option.label, option.description ?? ''].map((value) => value.toLowerCase());
+      return haystack.some((value) => value.includes(normalizedItemQuery));
+    });
+    const factor = catalogItemSort.direction === 'asc' ? 1 : -1;
+    return [...base].sort((a, b) => {
+      switch (catalogItemSort.key) {
+        case 'label':
+          return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }) * factor;
+        case 'duration':
+          return ((a.defaultDurationMin ?? 0) - (b.defaultDurationMin ?? 0)) * factor;
+        case 'price':
+          return (a.unitPriceHT - b.unitPriceHT) * factor;
+        case 'active': {
+          const aVal = a.active ? 1 : 0;
+          const bVal = b.active ? 1 : 0;
+          return (bVal - aVal) * factor;
+        }
+        case 'tva': {
+          const aVal = a.tvaPct ?? -1;
+          const bVal = b.tvaPct ?? -1;
+          return (aVal - bVal) * factor;
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [selectedCatalogService, normalizedItemQuery, catalogItemSort]);
+
+  const toggleCatalogServiceSort = (key: typeof catalogServiceSort.key) => {
+    setCatalogServiceSort((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const toggleCatalogItemSort = (key: typeof catalogItemSort.key) => {
+    setCatalogItemSort((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
   const getListSectionRef = (section: SectionId) => {
     switch (section) {
       case 'profile':
@@ -266,12 +495,23 @@ const SettingsPage = () => {
         return companiesSectionRef;
       case 'signatures':
         return signaturesSectionRef;
+      case 'catalog':
+        return catalogSectionRef;
       case 'sidebarTitle':
         return sidebarTitleSectionRef;
       default:
         return profileSectionRef;
     }
   };
+
+  useEffect(() => {
+    if (selectedCatalogService) {
+      setCatalogItemForm((form) => ({
+        ...form,
+        serviceId: selectedCatalogService.id,
+      }));
+    }
+  }, [selectedCatalogService?.id]);
 
   const scrollToSection = (section: SectionId) => {
     const ref = getListSectionRef(section);
@@ -290,6 +530,18 @@ const SettingsPage = () => {
   }, []);
 
   const closeDetail = (section: DetailState['section']) => {
+    if (section === 'catalog') {
+      const fallbackServiceId = (() => {
+        if (detailState?.section === 'catalog') {
+          if (detailState.mode === 'create-item' || detailState.mode === 'edit-item') {
+            return detailState.serviceId;
+          }
+        }
+        return selectedCatalogService?.id ?? services[0]?.id ?? '';
+      })();
+      setCatalogServiceForm(buildCatalogServiceForm(null));
+      setCatalogItemForm(buildCatalogItemForm(fallbackServiceId, null));
+    }
     setDetailState(null);
     updateHash(null);
     const listSection: SectionId = section;
@@ -558,6 +810,166 @@ const SettingsPage = () => {
     }
   };
 
+  const handleCatalogServiceChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value, type, checked } = event.target as HTMLInputElement;
+    setCatalogServiceForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const openCatalogServiceDetail = (service: Service | null = null) => {
+    if (service) {
+      setCatalogServiceForm(buildCatalogServiceForm(service));
+      setDetailState({ section: 'catalog', mode: 'edit-service', serviceId: service.id });
+    } else {
+      setCatalogServiceForm(buildCatalogServiceForm(null));
+      setDetailState({ section: 'catalog', mode: 'create-service' });
+    }
+  };
+
+  const handleCatalogServiceCancel = () => {
+    if (detailState?.section !== 'catalog') {
+      return;
+    }
+    if (detailState.mode === 'edit-service') {
+      const service = services.find((item) => item.id === detailState.serviceId) ?? null;
+      setCatalogServiceForm(buildCatalogServiceForm(service));
+    } else {
+      setCatalogServiceForm(buildCatalogServiceForm(null));
+    }
+  };
+
+  const handleCatalogServiceSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const payload = {
+      name: catalogServiceForm.name.trim(),
+      category: catalogServiceForm.category,
+      description: catalogServiceForm.description.trim(),
+      active: catalogServiceForm.active,
+    };
+    if (catalogServiceForm.id) {
+      const updated = updateService(catalogServiceForm.id, payload);
+      if (updated) {
+        setSelectedCatalogServiceId(updated.id);
+        setCatalogServiceForm(buildCatalogServiceForm(updated));
+        closeDetail('catalog');
+      }
+    } else {
+      const created = addService({ ...payload, options: [] });
+      setSelectedCatalogServiceId(created.id);
+      setCatalogServiceForm(buildCatalogServiceForm(created));
+      closeDetail('catalog');
+    }
+  };
+
+  const handleCatalogServiceDelete = (serviceId: string) => {
+    removeService(serviceId);
+    if (detailState?.section === 'catalog') {
+      closeDetail('catalog');
+    }
+  };
+
+  const handleCatalogServiceDuplicate = (service: Service) => {
+    const baseName = service.name.trim();
+    const duplicateName = baseName ? `${baseName} (copie)` : 'Service copié';
+    const created = addService({
+      name: duplicateName,
+      category: service.category,
+      description: service.description ?? '',
+      active: service.active,
+      options: [],
+    });
+    service.options.forEach((option) => {
+      addServiceOption(created.id, {
+        label: option.label,
+        description: option.description,
+        defaultDurationMin: option.defaultDurationMin,
+        unitPriceHT: option.unitPriceHT,
+        tvaPct: option.tvaPct ?? undefined,
+        active: option.active,
+      });
+    });
+    setSelectedCatalogServiceId(created.id);
+  };
+
+  const openCatalogItemDetail = (serviceId: string, option: ServiceOption | null = null) => {
+    setCatalogItemForm(buildCatalogItemForm(serviceId, option));
+    if (option) {
+      setDetailState({ section: 'catalog', mode: 'edit-item', serviceId, itemId: option.id });
+    } else {
+      setDetailState({ section: 'catalog', mode: 'create-item', serviceId });
+    }
+  };
+
+  const handleCatalogItemChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value, type, checked } = event.target as HTMLInputElement;
+    setCatalogItemForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleCatalogItemCancel = () => {
+    if (detailState?.section !== 'catalog') {
+      return;
+    }
+    if (detailState.mode === 'edit-item') {
+      const service = services.find((item) => item.id === detailState.serviceId) ?? null;
+      const option = service?.options.find((item) => item.id === detailState.itemId) ?? null;
+      setCatalogItemForm(buildCatalogItemForm(detailState.serviceId, option));
+    } else if (detailState.mode === 'create-item') {
+      setCatalogItemForm(buildCatalogItemForm(detailState.serviceId, null));
+    }
+  };
+
+  const handleCatalogItemSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const targetServiceId = catalogItemForm.serviceId;
+    if (!targetServiceId) {
+      return;
+    }
+    const durationValue = Number.parseFloat(catalogItemForm.defaultDurationMin);
+    const unitPriceValue = Number.parseFloat(catalogItemForm.unitPriceHT);
+    const tvaValue = catalogItemForm.tvaPct.trim().length
+      ? Number.parseFloat(catalogItemForm.tvaPct)
+      : NaN;
+    const payload = {
+      label: catalogItemForm.label.trim(),
+      description: catalogItemForm.description.trim(),
+      defaultDurationMin: Number.isNaN(durationValue) ? 0 : durationValue,
+      unitPriceHT: Number.isNaN(unitPriceValue) ? 0 : unitPriceValue,
+      tvaPct: Number.isNaN(tvaValue) ? undefined : tvaValue,
+      active: catalogItemForm.active,
+    };
+    if (catalogItemForm.id) {
+      const updated = updateServiceOption(targetServiceId, catalogItemForm.id, payload);
+      if (updated) {
+        setSelectedCatalogServiceId(targetServiceId);
+        setCatalogItemForm(buildCatalogItemForm(targetServiceId, updated));
+        closeDetail('catalog');
+      }
+    } else {
+      const created = addServiceOption(targetServiceId, payload);
+      if (created) {
+        setSelectedCatalogServiceId(targetServiceId);
+        setCatalogItemForm(buildCatalogItemForm(targetServiceId, created));
+        closeDetail('catalog');
+      }
+    }
+  };
+
+  const handleCatalogItemDelete = (serviceId: string, itemId: string) => {
+    removeServiceOption(serviceId, itemId);
+    if (detailState?.section === 'catalog') {
+      closeDetail('catalog');
+    }
+  };
+
   const handleCompanyRemove = (companyId: string) => {
     removeCompany(companyId);
   };
@@ -723,6 +1135,19 @@ const SettingsPage = () => {
         return detailState.mode === 'edit' ? "Modifier l’entreprise" : 'Ajouter une entreprise';
       case 'signatures':
         return detailState.mode === 'edit' ? 'Modifier la signature' : 'Créer une signature';
+      case 'catalog':
+        switch (detailState.mode) {
+          case 'create-service':
+            return 'Ajouter un service au catalogue';
+          case 'edit-service':
+            return 'Modifier le service du catalogue';
+          case 'create-item':
+            return 'Ajouter une prestation au service';
+          case 'edit-item':
+            return 'Modifier la prestation du service';
+          default:
+            return '';
+        }
       case 'sidebarTitle':
         return 'Personnaliser le titre de la sidebar';
       default:
@@ -741,6 +1166,19 @@ const SettingsPage = () => {
         return 'Complétez les informations légales, TVA et visuels utilisés pour vos documents.';
       case 'signatures':
         return 'Définissez le contenu HTML et la portée de la signature jointe à vos e-mails.';
+      case 'catalog':
+        switch (detailState.mode) {
+          case 'create-service':
+            return 'Créez un service réutilisable pour accélérer la préparation de vos interventions.';
+          case 'edit-service':
+            return 'Mettez à jour les informations du service sans impacter les interventions existantes.';
+          case 'create-item':
+            return 'Ajoutez une prestation associée pour préparer rapidement les devis et ordres de mission.';
+          case 'edit-item':
+            return 'Ajustez la prestation sélectionnée tout en conservant l’historique des dossiers.';
+          default:
+            return '';
+        }
       case 'sidebarTitle':
         return 'Adaptez le titre affiché dans la navigation latérale pour refléter votre identité.';
       default:
@@ -759,6 +1197,10 @@ const SettingsPage = () => {
       case 'signatures':
       case 'sidebarTitle':
         return detailState.mode === 'edit' ? 'Modification' : 'Création';
+      case 'catalog':
+        return detailState.mode === 'create-service' || detailState.mode === 'create-item'
+          ? 'Création'
+          : 'Modification';
       default:
         return '';
     }
@@ -1112,6 +1554,358 @@ const SettingsPage = () => {
                     Créez votre première signature pour accélérer vos envois de documents.
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'catalog' && (
+            <div
+              ref={catalogSectionRef}
+              tabIndex={-1}
+              className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <div className="flex flex-col gap-2">
+                <h2 className="text-base font-semibold text-slate-900">Services & Produits</h2>
+                <p className="text-sm text-slate-500">
+                  Constituez un catalogue unifié pour accélérer la création d’interventions, devis et factures.
+                </p>
+              </div>
+              <div className="space-y-6">
+                <Card
+                  padding="lg"
+                  title="Catalogue services"
+                  description="Sélectionnez un service pour afficher ses prestations associées."
+                  action={
+                    <Button size="sm" onClick={() => openCatalogServiceDetail(null)}>
+                      <IconPlus />
+                      Nouveau service
+                    </Button>
+                  }
+                  className="space-y-4"
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      value={catalogServiceQuery}
+                      onChange={(event) => setCatalogServiceQuery(event.target.value)}
+                      placeholder="Rechercher un service…"
+                      className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </div>
+                  <div className="data-table__outer">
+                    <div className="data-table__scroll">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th className="data-table__header-cell">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('name')}
+                                className="data-table__sort"
+                              >
+                                Nom
+                                {catalogServiceSort.key === 'name' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('category')}
+                                className="data-table__sort"
+                              >
+                                Catégorie
+                                {catalogServiceSort.key === 'category' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('active')}
+                                className="data-table__sort"
+                              >
+                                Statut
+                                {catalogServiceSort.key === 'active' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell data-table__header-cell--numeric data-table__header-cell--optional">
+                              <button
+                                type="button"
+                                onClick={() => toggleCatalogServiceSort('count')}
+                                className="data-table__sort"
+                              >
+                                Prestations
+                                {catalogServiceSort.key === 'count' && (
+                                  <span className="data-table__sort-indicator">
+                                    {catalogServiceSort.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </button>
+                            </th>
+                            <th className="data-table__header-cell data-table__header-cell--actions">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedCatalogServices.map((service) => (
+                            <tr
+                              key={service.id}
+                              onClick={() => setSelectedCatalogServiceId(service.id)}
+                              className={clsx(
+                                'data-table__row',
+                                'data-table__row--selectable',
+                                selectedCatalogService?.id === service.id && 'data-table__row--active'
+                              )}
+                            >
+                              <td className="data-table__cell data-table__cell--primary">
+                                <div>
+                                  <span>{service.name}</span>
+                                  {service.description && (
+                                    <span className="data-table__meta">{service.description}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="data-table__cell">{service.category}</td>
+                              <td className="data-table__cell data-table__cell--status">
+                                <span
+                                  className={clsx('status-pill', !service.active && 'status-pill--inactive')}
+                                >
+                                  {service.active ? 'Actif' : 'Inactif'}
+                                </span>
+                              </td>
+                              <td className="data-table__cell data-table__cell--numeric data-table__cell--optional">
+                                {service.options.length}
+                              </td>
+                              <td className="data-table__cell data-table__cell--actions">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <RowActionButton
+                                    label="Modifier"
+                                    onClick={() => {
+                                      openCatalogServiceDetail(service);
+                                    }}
+                                  >
+                                    <IconEdit />
+                                  </RowActionButton>
+                                  <RowActionButton
+                                    label="Dupliquer"
+                                    onClick={() => {
+                                      handleCatalogServiceDuplicate(service);
+                                    }}
+                                  >
+                                    <IconDuplicate />
+                                  </RowActionButton>
+                                  <RowActionButton
+                                    label="Supprimer"
+                                    tone="danger"
+                                    onClick={() => {
+                                      handleCatalogServiceDelete(service.id);
+                                    }}
+                                  >
+                                    <IconTrash />
+                                  </RowActionButton>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {!sortedCatalogServices.length && (
+                            <tr>
+                              <td colSpan={5} className="data-table__empty">
+                                Aucun service enregistré pour le moment.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </Card>
+                <Card
+                  padding="lg"
+                  title={selectedCatalogService ? selectedCatalogService.name : 'Prestations du service'}
+                  description={
+                    selectedCatalogService
+                      ? 'Réglez les durées et tarifs par défaut de chaque prestation.'
+                      : 'Sélectionnez un service dans le catalogue pour gérer ses prestations associées.'
+                  }
+                  action={
+                    selectedCatalogService ? (
+                      <Button size="sm" onClick={() => openCatalogItemDetail(selectedCatalogService.id)}>
+                        <IconPlus />
+                        Ajouter prestation
+                      </Button>
+                    ) : undefined
+                  }
+                  className="space-y-4"
+                >
+                  {selectedCatalogService ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          value={catalogItemQuery}
+                          onChange={(event) => setCatalogItemQuery(event.target.value)}
+                          placeholder="Rechercher une prestation…"
+                          className="w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </div>
+                      <div className="data-table__outer">
+                        <div className="data-table__scroll">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th className="data-table__header-cell">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('label')}
+                                    className="data-table__sort"
+                                  >
+                                    Libellé
+                                    {catalogItemSort.key === 'label' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
+                                    )}
+                                  </button>
+                                </th>
+                                <th className="data-table__header-cell data-table__header-cell--numeric">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('duration')}
+                                    className="data-table__sort"
+                                  >
+                                    Durée
+                                    {catalogItemSort.key === 'duration' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
+                                    )}
+                                  </button>
+                                </th>
+                                <th className="data-table__header-cell data-table__header-cell--numeric">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('price')}
+                                    className="data-table__sort"
+                                  >
+                                    Prix HT
+                                    {catalogItemSort.key === 'price' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
+                                    )}
+                                  </button>
+                                </th>
+                                {vatGloballyEnabled && (
+                                  <th className="data-table__header-cell data-table__header-cell--numeric data-table__header-cell--optional">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleCatalogItemSort('tva')}
+                                      className="data-table__sort"
+                                    >
+                                      TVA %
+                                      {catalogItemSort.key === 'tva' && (
+                                        <span className="data-table__sort-indicator">
+                                          {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                        </span>
+                                      )}
+                                    </button>
+                                  </th>
+                                )}
+                                <th className="data-table__header-cell">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCatalogItemSort('active')}
+                                    className="data-table__sort"
+                                  >
+                                    Actif
+                                    {catalogItemSort.key === 'active' && (
+                                      <span className="data-table__sort-indicator">
+                                        {catalogItemSort.direction === 'asc' ? '▲' : '▼'}
+                                      </span>
+                                    )}
+                                  </button>
+                                </th>
+                                <th className="data-table__header-cell data-table__header-cell--actions">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sortedCatalogItems.map((option) => (
+                                <tr key={option.id} className="data-table__row">
+                                  <td className="data-table__cell data-table__cell--primary">
+                                    <div>
+                                      <span>{option.label}</span>
+                                      {option.description && (
+                                        <span className="data-table__meta">{option.description}</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="data-table__cell data-table__cell--numeric">
+                                    {option.defaultDurationMin ? `${option.defaultDurationMin} min` : '—'}
+                                  </td>
+                                  <td className="data-table__cell data-table__cell--numeric">
+                                    {formatCurrency(option.unitPriceHT)}
+                                  </td>
+                                  {vatGloballyEnabled && (
+                                    <td className="data-table__cell data-table__cell--numeric data-table__cell--optional">
+                                      {option.tvaPct !== undefined && option.tvaPct !== null ? `${option.tvaPct} %` : '—'}
+                                    </td>
+                                  )}
+                                  <td className="data-table__cell data-table__cell--status">
+                                    <span
+                                      className={clsx('status-pill', !option.active && 'status-pill--inactive')}
+                                    >
+                                      {option.active ? 'Actif' : 'Inactif'}
+                                    </span>
+                                  </td>
+                                  <td className="data-table__cell data-table__cell--actions">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <RowActionButton
+                                        label="Modifier"
+                                        onClick={() => {
+                                          openCatalogItemDetail(selectedCatalogService.id, option);
+                                        }}
+                                      >
+                                        <IconEdit />
+                                      </RowActionButton>
+                                      <RowActionButton
+                                        label="Supprimer"
+                                        tone="danger"
+                                        onClick={() => {
+                                          handleCatalogItemDelete(selectedCatalogService.id, option.id);
+                                        }}
+                                      >
+                                        <IconTrash />
+                                      </RowActionButton>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {!sortedCatalogItems.length && (
+                                <tr>
+                                  <td colSpan={vatGloballyEnabled ? 6 : 5} className="data-table__empty">
+                                    Aucune prestation enregistrée pour ce service.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-soft border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                      Ajoutez un service pour configurer vos prestations.
+                    </div>
+                  )}
+                </Card>
               </div>
             </div>
           )}
@@ -1512,6 +2306,170 @@ const SettingsPage = () => {
                 </div>
               </form>
             )}
+            {detailState.section === 'catalog' &&
+              (detailState.mode === 'create-service' || detailState.mode === 'edit-service') && (
+                <form onSubmit={handleCatalogServiceSubmit} className="text-sm text-slate-600">
+                  <div className="space-y-5 px-6 py-6">
+                    <div className={detailFormGridClass}>
+                      <label className={fieldLabelClass}>
+                        <span>Nom du service</span>
+                        <input
+                          name="name"
+                          value={catalogServiceForm.name}
+                          onChange={handleCatalogServiceChange}
+                          className={inputClass}
+                          required
+                        />
+                      </label>
+                      <label className={fieldLabelClass}>
+                        <span>Catégorie</span>
+                        <select
+                          name="category"
+                          value={catalogServiceForm.category}
+                          onChange={handleCatalogServiceChange}
+                          className={inputClass}
+                        >
+                          {CATALOG_CATEGORIES.map((category) => (
+                            <option key={category.value} value={category.value}>
+                              {category.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label className={fieldLabelClass}>
+                      <span>Description courte</span>
+                      <textarea
+                        name="description"
+                        value={catalogServiceForm.description}
+                        onChange={handleCatalogServiceChange}
+                        rows={3}
+                        className={textareaClass}
+                        placeholder="Décrivez en quelques mots l’intervention proposée"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input
+                        type="checkbox"
+                        name="active"
+                        checked={catalogServiceForm.active}
+                        onChange={handleCatalogServiceChange}
+                        className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
+                      />
+                      <span>Service actif et sélectionnable dans la page Services</span>
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                    <Button type="button" variant="ghost" onClick={handleCatalogServiceCancel}>
+                      Annuler
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => closeDetail('catalog')}>
+                      Fermer
+                    </Button>
+                    <Button type="submit">Enregistrer</Button>
+                  </div>
+                </form>
+              )}
+            {detailState.section === 'catalog' &&
+              (detailState.mode === 'create-item' || detailState.mode === 'edit-item') &&
+              (() => {
+                const parentService =
+                  services.find((service) => service.id === detailState.serviceId) ?? null;
+                return (
+                  <form onSubmit={handleCatalogItemSubmit} className="text-sm text-slate-600">
+                    <div className="space-y-5 px-6 py-6">
+                      <div className="rounded-soft border border-slate-200 bg-white/60 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                          Service rattaché
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-slate-700">
+                          {parentService ? parentService.name : 'Service introuvable'}
+                        </p>
+                      </div>
+                      <label className={fieldLabelClass}>
+                        <span>Libellé de la prestation</span>
+                        <input
+                          name="label"
+                          value={catalogItemForm.label}
+                          onChange={handleCatalogItemChange}
+                          className={inputClass}
+                          required
+                        />
+                      </label>
+                      <label className={fieldLabelClass}>
+                        <span>Description</span>
+                        <textarea
+                          name="description"
+                          value={catalogItemForm.description}
+                          onChange={handleCatalogItemChange}
+                          rows={3}
+                          className={textareaClass}
+                          placeholder="Détails visibles lors du chiffrage"
+                        />
+                      </label>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <label className={fieldLabelClass}>
+                          <span>Durée par défaut (min)</span>
+                          <input
+                            type="number"
+                            name="defaultDurationMin"
+                            min={0}
+                            step={5}
+                            value={catalogItemForm.defaultDurationMin}
+                            onChange={handleCatalogItemChange}
+                            className={inputClass}
+                          />
+                        </label>
+                        <label className={fieldLabelClass}>
+                          <span>Prix unitaire HT (€)</span>
+                          <input
+                            type="number"
+                            name="unitPriceHT"
+                            min={0}
+                            step={0.01}
+                            value={catalogItemForm.unitPriceHT}
+                            onChange={handleCatalogItemChange}
+                            className={inputClass}
+                          />
+                        </label>
+                        {vatGloballyEnabled && (
+                          <label className={fieldLabelClass}>
+                            <span>TVA %</span>
+                            <input
+                              type="number"
+                              name="tvaPct"
+                              min={0}
+                              step={0.1}
+                              value={catalogItemForm.tvaPct}
+                              onChange={handleCatalogItemChange}
+                              className={inputClass}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          name="active"
+                          checked={catalogItemForm.active}
+                          onChange={handleCatalogItemChange}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
+                        />
+                        <span>Prestation active et suggérée lors de la sélection du service</span>
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                      <Button type="button" variant="ghost" onClick={handleCatalogItemCancel}>
+                        Annuler
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => closeDetail('catalog')}>
+                        Fermer
+                      </Button>
+                      <Button type="submit">Enregistrer</Button>
+                    </div>
+                  </form>
+                );
+              })()}
             {detailState.section === 'signatures' && (
               <form onSubmit={handleSignatureSubmit} className="text-sm text-slate-600">
                 <div className="space-y-5 px-6 py-6">

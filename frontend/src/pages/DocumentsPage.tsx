@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { Table } from '../components/Table';
 import { Tag } from '../components/Tag';
 import { useAppData, DocumentRecord } from '../store/useAppData';
+import { formatCurrency } from '../lib/format';
 
 const inputClassName =
   'w-full rounded-soft border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20';
@@ -107,6 +108,7 @@ const DocumentsPage = () => {
   const [editForm, setEditForm] = useState<FormState | null>(null);
   const [createFileInputKey, setCreateFileInputKey] = useState(0);
   const [editFileInputKey, setEditFileInputKey] = useState(0);
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
 
   const canEditDocuments = hasPermission('documents.edit');
   const canViewDocuments = hasPermission('documents.view');
@@ -145,6 +147,12 @@ const DocumentsPage = () => {
       window.open(record.url, '_blank', 'noopener');
     }
   };
+
+  const scrollToList = useCallback(() => {
+    requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const updateCreateFile = (file: File) => {
     readFileAsDataUrl(file)
@@ -319,6 +327,7 @@ const DocumentsPage = () => {
     setCreateForm(EMPTY_FORM);
     setCreateFileInputKey((value) => value + 1);
     setActivePanel(null);
+    scrollToList();
   };
 
   const handleEdit = (event: FormEvent<HTMLFormElement>) => {
@@ -364,66 +373,80 @@ const DocumentsPage = () => {
     removeDocument(documentId);
   };
 
-  const rows = filteredDocuments.map((document) => [
-    <div key="title" className="min-w-[180px]">
-      <p className="text-sm font-semibold text-slate-900">{document.title}</p>
-      {document.description && (
-        <p className="mt-1 line-clamp-2 text-xs text-slate-500">{document.description}</p>
-      )}
-    </div>,
-    <span key="category" className="text-sm text-slate-700">
-      {document.category || 'Non classé'}
-    </span>,
-    <span key="owner" className="text-sm text-slate-700">
-      {document.owner || 'Équipe'}
-    </span>,
-    <span key="date" className="text-sm text-slate-700">{formatDate(document.updatedAt)}</span>,
-    <div key="tags" className="flex flex-wrap gap-1">
-      {document.tags.length > 0 ? (
-        document.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)
-      ) : (
-        <span className="text-xs text-slate-400">—</span>
-      )}
-    </div>,
-    <div key="actions" className="flex justify-end gap-2">
-      {canViewDocuments && (document.fileData || document.url) && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            handleDownload(document);
-          }}
-        >
-          {document.fileData ? 'Télécharger' : 'Ouvrir'}
-        </Button>
-      )}
-      {canEditDocuments && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            handleOpenEdit(document);
-          }}
-        >
-          Modifier
-        </Button>
-      )}
-      {canEditDocuments && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            handleDelete(document.id);
-          }}
-        >
-          Supprimer
-        </Button>
-      )}
-    </div>,
-  ]);
+  const rows = filteredDocuments.map((document) => {
+    const hasTotalHt = typeof document.totalHt === 'number' && !Number.isNaN(document.totalHt);
+    const hasTotalTtc = typeof document.totalTtc === 'number' && !Number.isNaN(document.totalTtc);
+
+    return [
+      <div key="title" className="min-w-[200px]">
+        <p className="text-sm font-semibold text-slate-900">{document.title}</p>
+        <p className="mt-1 text-[12px] text-slate-500">
+          {document.category || 'Archives internes'} · {document.owner || 'Équipe'}
+        </p>
+        {document.description && (
+          <p className="mt-1 line-clamp-2 text-[12px] text-slate-500">{document.description}</p>
+        )}
+      </div>,
+      <div key="type" className="text-sm text-slate-700">
+        <p className="font-medium text-slate-800">
+          {document.kind ? document.kind.toUpperCase() : document.category || 'Document'}
+        </p>
+        <p className="text-[12px] text-slate-500">{document.number ?? '—'}</p>
+      </div>,
+      <span key="status" className="text-sm text-slate-700">
+        {document.status ?? '—'}
+      </span>,
+      <div key="totals" className="text-sm text-slate-700">
+        {hasTotalHt ? (
+          <p className="font-medium text-slate-800">{formatCurrency(document.totalHt ?? 0)} HT</p>
+        ) : (
+          <p className="text-[12px] text-slate-500">Total indisponible</p>
+        )}
+        {hasTotalTtc && (!hasTotalHt || document.totalTtc !== document.totalHt) && (
+          <p className="text-[12px] text-slate-500">{formatCurrency(document.totalTtc ?? 0)} TTC</p>
+        )}
+      </div>,
+      <span key="date" className="text-sm text-slate-700">{formatDate(document.updatedAt)}</span>,
+      <div key="actions" className="flex justify-end gap-2">
+        {canViewDocuments && (document.fileData || document.url) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDownload(document);
+            }}
+          >
+            {document.fileData ? 'Télécharger' : 'Ouvrir'}
+          </Button>
+        )}
+        {canEditDocuments && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleOpenEdit(document);
+            }}
+          >
+            Modifier
+          </Button>
+        )}
+        {canEditDocuments && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDelete(document.id);
+            }}
+          >
+            Supprimer
+          </Button>
+        )}
+      </div>,
+    ];
+  });
 
   return (
     <div className="space-y-6">
@@ -462,14 +485,15 @@ const DocumentsPage = () => {
         </div>
       </Card>
 
-      <Card>
-        <Table
+      <div ref={listSectionRef}>
+        <Card>
+          <Table
           columns={[
             'Document',
-            'Catégorie',
-            'Référent',
+            'Type / Numéro',
+            'Statut',
+            'Montants',
             'Mise à jour',
-            'Tags',
             'Actions',
           ]}
           rows={rows}
@@ -486,8 +510,9 @@ const DocumentsPage = () => {
             }
             return undefined;
           }}
-        />
-      </Card>
+          />
+        </Card>
+      </div>
 
       {canEditDocuments && activePanel === 'create' && (
         <Card title="Nouveau document" description="Ajoutez un élément à l’archive interne." padding="lg">
