@@ -241,6 +241,18 @@ const MobileTestPage = () => {
   const [invoiceFeedback, setInvoiceFeedback] = useState<string | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
 
+  const scheduleScrollTo = (id: string, delay = 60) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.setTimeout(() => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, delay);
+  };
+
   const clientsById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
   const servicesById = useMemo(() => new Map(services.map((service) => [service.id, service])), [services]);
   const documentsByEngagementNumber = useMemo(() => {
@@ -295,6 +307,14 @@ const MobileTestPage = () => {
   const selectedEngagement = selectedEngagementId
     ? engagements.find((engagement) => engagement.id === selectedEngagementId) ?? null
     : null;
+
+  const nextRunnableEngagement = useMemo(
+    () =>
+      serviceEngagements.find(
+        (engagement) => engagement.status === 'planifié' || engagement.status === 'envoyé'
+      ) ?? null,
+    [serviceEngagements]
+  );
 
   useEffect(() => {
     if (!currentUserId || typeof window === 'undefined') {
@@ -481,12 +501,38 @@ const MobileTestPage = () => {
   const timeLabel = formatDateFn(now, 'HH:mm');
   const heroGreeting = userProfile.firstName ? `Bonjour ${userProfile.firstName}` : 'Bonjour';
   const heroSubtitle = activeCompany ? `Équipe ${activeCompany.name}` : 'Wash&Go terrain';
-  const canAccessTimer = Boolean(timerState);
   const isDarkTheme = theme === 'dark';
   const themeToggleGlyph = isDarkTheme ? '☾' : '☀︎';
   const themeToggleLabel = isDarkTheme ? 'Basculer en mode clair' : 'Basculer en mode sombre';
-  const navActiveKey: 'services' | 'create' | 'timer' =
-    view === 'create' ? 'create' : view === 'timer' ? 'timer' : 'services';
+  const canQuickStart = Boolean(
+    selectedEngagement ?? nextRunnableEngagement ?? timerState ?? serviceEngagements.length
+  );
+
+  const handleQuickCreateTap = () => {
+    if (view !== 'create') {
+      setView('create');
+      scheduleScrollTo('mobile-create-section');
+      return;
+    }
+    scheduleScrollTo('mobile-create-section');
+  };
+
+  const handleQuickStartTap = () => {
+    const target = selectedEngagement ?? nextRunnableEngagement ?? filteredServiceEngagements[0] ?? null;
+    if (!target) {
+      setView('services');
+      scheduleScrollTo('mobile-services-section');
+      return;
+    }
+    if (timerState && timerState.engagementId === target.id) {
+      setView('timer');
+      scheduleScrollTo('mobile-timer-section');
+      return;
+    }
+    setSelectedEngagementId(target.id);
+    setView('details');
+    scheduleScrollTo('mobile-details-section');
+  };
 
   const handleCreateService = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -561,7 +607,7 @@ const MobileTestPage = () => {
     ];
 
     return (
-      <section className="mobile-section mobile-section--stacked">
+      <section className="mobile-section mobile-section--stacked" id="mobile-services-section">
         <div className="mobile-intro">
           <div className="mobile-intro__heading">
             <p className="mobile-intro__eyebrow">{todaysLabel}</p>
@@ -656,7 +702,7 @@ const MobileTestPage = () => {
     const options: ServiceOption[] = service ? service.options : [];
 
     return (
-      <section className="mobile-section">
+      <section className="mobile-section" id="mobile-create-section">
         <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('services')}>
             Retour
@@ -814,7 +860,7 @@ const MobileTestPage = () => {
     const statusIntent = getStatusIntent(engagement.status);
 
     return (
-      <section className="mobile-section">
+      <section className="mobile-section" id="mobile-details-section">
         <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={handleNavigateBack}>
             Retour
@@ -928,7 +974,7 @@ const MobileTestPage = () => {
     const client = clientsById.get(engagement.clientId);
     const serviceName = servicesById.get(engagement.serviceId)?.name ?? 'Service';
     return (
-      <section className="mobile-section mobile-section--timer">
+      <section className="mobile-section mobile-section--timer" id="mobile-timer-section">
         <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={handleExitTimerView}>
             Retour
@@ -995,7 +1041,7 @@ const MobileTestPage = () => {
     const service = servicesById.get(engagement.serviceId);
     if (!client || !service) {
       return (
-        <section className="mobile-section">
+        <section className="mobile-section" id="mobile-invoice-section">
           <div className="mobile-section__header">
             <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('details')}>
               Retour
@@ -1127,7 +1173,7 @@ const MobileTestPage = () => {
     };
 
     return (
-      <section className="mobile-section">
+      <section className="mobile-section" id="mobile-invoice-section">
         <div className="mobile-section__header mobile-section__header--split">
           <button type="button" className="mobile-button mobile-button--ghost" onClick={() => setView('details')}>
             Retour
@@ -1240,33 +1286,29 @@ const MobileTestPage = () => {
 
   return (
     <div className="mobile-app">
-      <header className="mobile-app__header">
-        <div className="mobile-app__brand">
-          <div className="mobile-app__logo" aria-hidden="true">
-            WG
-          </div>
-          <div className="mobile-app__headline">
-            <p className="mobile-app__product">Wash&amp;Go</p>
-            <p className="mobile-app__subtitle">Interface terrain</p>
-          </div>
+      <header className="mobile-app__header mobile-app__header--condensed">
+        <div className="mobile-app__title-row">
+          <span className="mobile-app__title">Wash&amp;Go Mobile</span>
+          <span className="mobile-app__subtitle">Terrain</span>
         </div>
         <div className="mobile-app__header-actions">
           <button
             type="button"
-            className="mobile-button mobile-button--ghost mobile-theme-toggle"
+            className="mobile-icon-button"
             onClick={toggleTheme}
             aria-label={themeToggleLabel}
           >
             <span aria-hidden="true">{themeToggleGlyph}</span>
           </button>
-          <div className="mobile-app__user-card">
-            <div>
-              <p className="mobile-app__user-name">
-                {userProfile.firstName} {userProfile.lastName}
-              </p>
-              <p className="mobile-app__user-meta">{activeCompany?.name ?? 'Wash&Go'}</p>
-            </div>
-            <button type="button" className="mobile-button mobile-button--ghost" onClick={logout}>
+          <div className="mobile-user-chip" aria-live="polite">
+            <span className="mobile-user-chip__name">
+              {userProfile.firstName} {userProfile.lastName}
+            </span>
+            <button
+              type="button"
+              className="mobile-button mobile-button--ghost mobile-button--dense"
+              onClick={logout}
+            >
               Déconnexion
             </button>
           </div>
@@ -1287,43 +1329,23 @@ const MobileTestPage = () => {
           </div>
         ) : null}
       </main>
-      <nav className="mobile-bottom-nav" aria-label="Navigation mobile">
+      <footer className="mobile-action-bar" role="toolbar" aria-label="Raccourcis rapides">
         <button
           type="button"
-          className={`mobile-bottom-nav__item${navActiveKey === 'services' ? ' mobile-bottom-nav__item--active' : ''}`}
-          onClick={() => {
-            setView('services');
-            setServiceFilter('all');
-            setSelectedEngagementId(null);
-          }}
+          className="mobile-button mobile-button--primary mobile-action-bar__button"
+          onClick={handleQuickCreateTap}
         >
-          <span className="mobile-bottom-nav__label">Services</span>
+          Créer un service
         </button>
         <button
           type="button"
-          className={`mobile-bottom-nav__item${navActiveKey === 'create' ? ' mobile-bottom-nav__item--active' : ''}`}
-          onClick={() => {
-            setView('create');
-          }}
+          className="mobile-button mobile-button--secondary mobile-action-bar__button"
+          onClick={handleQuickStartTap}
+          disabled={!canQuickStart}
         >
-          <span className="mobile-bottom-nav__label">Créer</span>
+          Démarrer un service
         </button>
-        <button
-          type="button"
-          className={`mobile-bottom-nav__item${navActiveKey === 'timer' ? ' mobile-bottom-nav__item--active' : ''}`}
-          onClick={() => {
-            if (!timerState) {
-              return;
-            }
-            setSelectedEngagementId(timerState.engagementId);
-            setView('timer');
-          }}
-          disabled={!canAccessTimer}
-        >
-          <span className="mobile-bottom-nav__label">Minuteur</span>
-        </button>
-        <span className="mobile-bottom-nav__meta">© {new Date().getFullYear()} Wash&amp;Go</span>
-      </nav>
+      </footer>
     </div>
   );
 };

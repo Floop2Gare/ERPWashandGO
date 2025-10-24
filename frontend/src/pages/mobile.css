@@ -14,22 +14,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px clamp(16px, 4vw, 24px);
+  gap: 12px;
+  padding: 12px clamp(16px, 4vw, 24px);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+.mobile-app__header--condensed {
+  padding: 8px clamp(14px, 4vw, 20px);
+  min-height: 52px;
 }
 
 .mobile-app__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.mobile-app__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .mobile-app__logo {
@@ -55,59 +54,81 @@
   font-weight: 600;
 }
 
+.mobile-app__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.mobile-app__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .mobile-app__subtitle {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.mobile-app__user-card {
+.mobile-app__header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
+  gap: 10px;
 }
 
-.mobile-theme-toggle {
+.mobile-icon-button {
   width: 40px;
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 999px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   padding: 0;
   font-size: 1rem;
 }
 
-.mobile-theme-toggle span {
+.mobile-icon-button:hover,
+.mobile-icon-button:focus-visible {
+  background: var(--surface-tint);
+}
+
+.mobile-icon-button span {
   pointer-events: none;
 }
 
-.mobile-app__user-name {
-  margin: 0;
-  font-weight: 600;
-  font-size: 0.95rem;
+.mobile-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.mobile-app__user-meta {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--muted);
+.mobile-user-chip__name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.mobile-button--dense {
+  padding: 6px 12px;
+  font-size: 0.85rem;
 }
 
 .mobile-app__main {
   flex: 1;
   padding: clamp(16px, 4vw, 28px);
-  padding-bottom: calc(clamp(16px, 4vw, 28px) + 96px);
+  padding-bottom: calc(clamp(16px, 4vw, 28px) + 88px);
   display: flex;
   flex-direction: column;
   gap: 28px;
   align-items: center;
   overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .mobile-app__main--center {
@@ -819,56 +840,32 @@
   justify-content: flex-end;
 }
 
-.mobile-bottom-nav {
+.mobile-action-bar {
   position: sticky;
   bottom: 0;
-  z-index: 40;
+  z-index: 45;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
   gap: 12px;
   padding: 12px clamp(16px, 4vw, 24px);
   background: var(--surface);
   border-top: 1px solid var(--border);
+  box-shadow: 0 -12px 24px rgba(15, 17, 21, 0.06);
 }
 
-.mobile-bottom-nav__item {
+.mobile-action-bar__button {
   flex: 1;
-  min-width: 120px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+}
+
+.mobile-button--secondary {
   background: transparent;
-  color: var(--muted);
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+  color: var(--txt-accent);
+  border: 1px solid var(--border);
 }
 
-.mobile-bottom-nav__item--active {
-  border-color: var(--accent);
-  background: var(--surface-tint);
-  color: var(--accent);
-}
-
-.mobile-bottom-nav__item:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.mobile-bottom-nav__label {
-  font-size: 0.9rem;
-}
-
-.mobile-bottom-nav__meta {
-  flex-basis: 100%;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--muted);
+.mobile-button--secondary:hover,
+.mobile-button--secondary:focus-visible {
+  border-color: var(--txt-accent);
+  color: var(--txt-accent-2);
 }
 
 .mobile-app__footer {
@@ -914,11 +911,17 @@
   .mobile-app__header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 
-  .mobile-app__user-card {
+  .mobile-app__header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .mobile-user-chip {
+    flex: 1;
+    justify-content: flex-end;
   }
 
   .mobile-toolbar__group {
@@ -929,8 +932,11 @@
     flex-direction: column;
   }
 
-  .mobile-bottom-nav__item {
-    min-width: 0;
-    flex: 1 1 30%;
+  .mobile-action-bar {
+    flex-direction: column;
+  }
+
+  .mobile-action-bar__button {
+    width: 100%;
   }
 }
