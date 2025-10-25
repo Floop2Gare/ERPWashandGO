@@ -100,16 +100,22 @@ export const fetchCalendarEvents = async (
     params.set('user', options.user);
   }
   if (options.rangeDays) {
-    params.set('days', String(options.rangeDays));
+    const rangeDays = String(options.rangeDays);
+    params.set('days', rangeDays);
+    params.set('rangeDays', rangeDays);
   }
   if (options.pastDays) {
-    params.set('past_days', String(options.pastDays));
+    const pastDays = String(options.pastDays);
+    params.set('past_days', pastDays);
+    params.set('pastDays', pastDays);
   }
 
   const query = params.toString();
-  // Utiliser une variable d'environnement pour l'URL de l'API
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const endpoint = query ? `${apiUrl}/planning/google-calendar?${query}` : `${apiUrl}/planning/google-calendar`;
+  const configuredBase = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpointBase = configuredBase
+    ? `${configuredBase}/planning/google-calendar`
+    : `/api/planning/google-calendar`;
+  const endpoint = query ? `${endpointBase}?${query}` : endpointBase;
   const response = await fetch(endpoint, {
     method: 'GET',
     signal: options.signal,
@@ -122,27 +128,45 @@ export const fetchCalendarEvents = async (
     throw new Error(`Calendar sync failed with status ${response.status}`);
   }
 
-  // Adapter la réponse du backend Python au format attendu
-  const backendData = await response.json() as { events: Array<{
-    id: string;
-    summary: string;
-    description?: string;
-    location?: string;
-    start: string;
-    end: string;
-    status: string;
-    htmlLink?: string;
-  }>; warnings: string[] };
-  
-  // Convertir au format attendu par le frontend
-  const now = new Date().toISOString();
-  const payload: CalendarApiResponse = {
-    fetchedAt: now,
+  const raw = await response.json();
+
+  if (raw && typeof raw === 'object' && 'fetchedAt' in raw && 'range' in raw) {
+    const payload = raw as CalendarApiResponse;
+    payload.events = (payload.events ?? []).map((event) => ({
+      ...event,
+      calendarKey: event.calendarKey || options.user || 'all',
+      calendarId: event.calendarId || '',
+      attendees: event.attendees || [],
+    }));
+    payload.warnings = payload.warnings ?? [];
+    return payload;
+  }
+
+  const backendData = raw as {
+    events: Array<{
+      id: string;
+      summary: string;
+      description?: string;
+      location?: string;
+      start: string;
+      end: string;
+      status: string;
+      htmlLink?: string;
+    }>;
+    warnings?: string[];
+  };
+
+  const now = new Date();
+  const pastDays = options.pastDays ?? 3;
+  const rangeDays = options.rangeDays ?? 30;
+
+  return {
+    fetchedAt: now.toISOString(),
     range: {
-      timeMin: new Date(Date.now() - (options.pastDays || 3) * 24 * 60 * 60 * 1000).toISOString(),
-      timeMax: new Date(Date.now() + (options.rangeDays || 30) * 24 * 60 * 60 * 1000).toISOString(),
+      timeMin: new Date(now.getTime() - pastDays * 24 * 60 * 60 * 1000).toISOString(),
+      timeMax: new Date(now.getTime() + rangeDays * 24 * 60 * 60 * 1000).toISOString(),
     },
-    events: backendData.events.map(event => ({
+    events: (backendData.events ?? []).map((event) => ({
       id: event.id,
       calendarKey: options.user || 'all',
       calendarId: '',
@@ -163,10 +187,8 @@ export const fetchCalendarEvents = async (
       timeZone: null,
       attendees: [],
     })),
-    warnings: backendData.warnings || [],
+    warnings: backendData.warnings ?? [],
   };
-  
-  return payload;
 };
 
 const normalise = (value: string | null | undefined) => value?.trim().toLowerCase() ?? '';
