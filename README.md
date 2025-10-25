@@ -125,7 +125,7 @@ Les variables Google et SMTP doivent être configurées dans le dashboard Vercel
 
 ## Déploiement sur Vercel
 
-- `vercel.json` pilote l’installation (`npm install`), le build (`npm run vercel-build`) et expose `frontend/dist`.
+- `vercel.json` pilote l’installation (`npm install`), le build (`npm run vercel-build`) et publie le dossier `dist` généré depuis `frontend`.
 - Les routes `api/**/*.ts` sont traitées comme fonctions serverless (Google Calendar, e-mails) en Node 18.
 - Toutes les routes front (`/*`) sont réécrites vers `index.html` pour supporter le routing React.
 - Pour reproduire le build Vercel en local :
