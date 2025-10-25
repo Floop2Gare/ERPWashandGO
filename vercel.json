@@ -1,8 +1,6 @@
 {
-  "version": 2,
   "buildCommand": "node build-vercel.js",
   "outputDirectory": "dist",
-  "framework": null,
   "functions": {
     "api/*.ts": {
       "runtime": "nodejs18.x"
@@ -12,19 +10,6 @@
     {
       "source": "/api/:path*",
       "destination": "/api/:path*"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
     }
   ]
 }
