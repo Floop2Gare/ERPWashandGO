@@ -48,7 +48,7 @@ ERP Wash&Go 2 est une plateforme SaaS dédiée aux équipes de lavage et de deta
 - Calculs de totals, TVA, planning hebdomadaire et liens vers le catalogue Services & Produits.
 
 ### Fonctions serverless Vercel
-- `api/planning-google.ts` : agrégation des événements Google Calendar via comptes de service.
+- `api/planning/google-calendar.ts` : agrégation des événements Google Calendar via comptes de service.
 - `api/send-document-email.ts` : envoi d’e-mails transactionnels (devis/factures) via SMTP.
 
 ## Fonctionnalités phares
@@ -100,7 +100,7 @@ ERP Wash&Go 2 est une plateforme SaaS dédiée aux équipes de lavage et de deta
 
 | Variable | Description |
 | --- | --- |
-| `VITE_APP_BASE_API` | URL de l’API FastAPI (par défaut `http://localhost:8000`). |
+| `VITE_API_URL` | URL de l’API FastAPI en local (si absent, le front appelle les fonctions Vercel `/api/*`). |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Paramètres SMTP pour l’envoi de devis/factures. |
 | `CALENDAR_ID_<TECHNICIEN>` | Identifiants Google Calendar synchronisés avec le planning (ex. `CALENDAR_ID_ADRIEN`). |
 | `GOOGLE_SA_<TECHNICIEN>_JSON` | JSON du compte de service Google autorisé à lire le calendrier correspondant. |
@@ -126,7 +126,7 @@ Les variables Google et SMTP doivent être configurées dans le dashboard Vercel
 ## Déploiement sur Vercel
 
 - `vercel.json` pilote l’installation (`npm install`), le build (`npm run build`) et expose `frontend/dist`.
-- Les routes `api/*.ts` sont traitées comme fonctions serverless (Google Calendar, e-mails).
+- Les routes `api/**/*.ts` sont traitées comme fonctions serverless (Google Calendar, e-mails) en Node 18.
 - Toutes les routes front (`/*`) sont réécrites vers `index.html` pour supporter le routing React.
 - Pour reproduire le build Vercel en local :
   ```bash
