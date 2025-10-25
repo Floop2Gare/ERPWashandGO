@@ -107,8 +107,9 @@ export const fetchCalendarEvents = async (
   }
 
   const query = params.toString();
-  // Utiliser le backend Python
-  const endpoint = query ? `http://localhost:8000/planning/google-calendar?${query}` : 'http://localhost:8000/planning/google-calendar';
+  // Utiliser une variable d'environnement pour l'URL de l'API
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const endpoint = query ? `${apiUrl}/planning/google-calendar?${query}` : `${apiUrl}/planning/google-calendar`;
   const response = await fetch(endpoint, {
     method: 'GET',
     signal: options.signal,
@@ -121,7 +122,50 @@ export const fetchCalendarEvents = async (
     throw new Error(`Calendar sync failed with status ${response.status}`);
   }
 
-  const payload = (await response.json()) as CalendarApiResponse;
+  // Adapter la réponse du backend Python au format attendu
+  const backendData = await response.json() as { events: Array<{
+    id: string;
+    summary: string;
+    description?: string;
+    location?: string;
+    start: string;
+    end: string;
+    status: string;
+    htmlLink?: string;
+  }>; warnings: string[] };
+  
+  // Convertir au format attendu par le frontend
+  const now = new Date().toISOString();
+  const payload: CalendarApiResponse = {
+    fetchedAt: now,
+    range: {
+      timeMin: new Date(Date.now() - (options.pastDays || 3) * 24 * 60 * 60 * 1000).toISOString(),
+      timeMax: new Date(Date.now() + (options.rangeDays || 30) * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    events: backendData.events.map(event => ({
+      id: event.id,
+      calendarKey: options.user || 'all',
+      calendarId: '',
+      summary: event.summary,
+      description: event.description || null,
+      location: event.location || null,
+      status: event.status || null,
+      htmlLink: event.htmlLink || null,
+      created: null,
+      updated: null,
+      hangoutLink: null,
+      colorId: null,
+      isAllDay: false,
+      start: event.start,
+      end: event.end,
+      startDate: event.start,
+      endDate: event.end,
+      timeZone: null,
+      attendees: [],
+    })),
+    warnings: backendData.warnings || [],
+  };
+  
   return payload;
 };
 
