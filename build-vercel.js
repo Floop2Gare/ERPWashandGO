@@ -38,4 +38,11 @@ function copyDir(src, dest) {
 // Copier frontend/dist vers dist
 copyDir('frontend/dist', 'dist');
 console.log('✅ Build files copied to dist directory');
+
+// Copier api vers dist/api
+if (fs.existsSync('api')) {
+  copyDir('api', 'dist/api');
+  console.log('✅ API files copied to dist/api');
+}
+
 console.log('🎉 Vercel build process completed successfully!');

@@ -132,3 +132,4 @@ GOOGLE_CALENDAR_ID_CLEMENT = clement@example.com
 **Rapport généré le**: $(date)
 **Status**: ⚠️ Configuration requise
 **Priorité**: 🔴 Haute
+
