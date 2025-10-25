@@ -23,8 +23,9 @@ yarn-error.log*
 .cache/
 .parcel-cache/
 
-# Fichiers de build locaux
-dist/
+# Fichiers de build locaux (générés par Vite côté frontend)
+# Laisser le dossier `dist/` racine disponible pour l'étape `npm run vercel-build`
+# qui le crée dynamiquement. Les artefacts Vite sont déjà exclus du dépôt via `.gitignore`.
 build/
 
 # Fichiers de test
