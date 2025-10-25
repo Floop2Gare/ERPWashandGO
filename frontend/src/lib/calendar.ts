@@ -100,14 +100,15 @@ export const fetchCalendarEvents = async (
     params.set('user', options.user);
   }
   if (options.rangeDays) {
-    params.set('rangeDays', String(options.rangeDays));
+    params.set('days', String(options.rangeDays));
   }
   if (options.pastDays) {
-    params.set('pastDays', String(options.pastDays));
+    params.set('past_days', String(options.pastDays));
   }
 
   const query = params.toString();
-  const endpoint = query ? `/api/planning-google?${query}` : '/api/planning-google';
+  // Utiliser le backend Python
+  const endpoint = query ? `http://localhost:8000/planning/google-calendar?${query}` : 'http://localhost:8000/planning/google-calendar';
   const response = await fetch(endpoint, {
     method: 'GET',
     signal: options.signal,
